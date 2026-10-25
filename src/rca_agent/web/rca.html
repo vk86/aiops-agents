@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIOps RCA Workbench</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: top bar → incident picker strip → investigation (left) | coverage, observations, report, agent (right) */
+:root{
+  --navy:#1e2a3d; --navy-2:#2a3850; --ink:#1c2533; --muted:#5f6b7a; --line:#dbe1e7;
+  --bg:#eef2f4; --surface:#ffffff; --sunk:#f5f7f9; --tint:#e6f1f0;
+  --teal:#1d7a73; --teal-ink:#145c56; --red:#b4513f; --red-soft:#f8e8e3; --amber:#a86a12; --amber-soft:#fcf1dd;
+  --good:#1f7a4d; --good-soft:#e2f2e9; --on-navy:#e9eef4; --on-navy-muted:#9fb3c6; --primary:#1e2a3d; --on-primary:#e9eef4;
+  --f-display:"Space Grotesk",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --navy:#0f1823; --navy-2:#1a2636; --ink:#e3e9ef; --muted:#9aa8b6; --line:#2b3949;
+  --bg:#0b121b; --surface:#131e2b; --sunk:#0f1925; --tint:#12302d;
+  --teal:#41b3a9; --teal-ink:#73d1c7; --red:#e48a75; --red-soft:#3a231f; --amber:#e3ab5c; --amber-soft:#33281a;
+  --good:#5fc490; --good-soft:#14301f; --primary:#3a9d94; --on-primary:#06201d; color-scheme:dark}}
+*{box-sizing:border-box} [hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 var(--f-body)}
+h1,h2,h3,h4{font-family:var(--f-display);margin:0;letter-spacing:-.01em}
+button,input,textarea,select{font:inherit;color:inherit} button{cursor:pointer}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.mono{font-family:var(--f-mono);font-size:.92em} .muted{color:var(--muted)} .small{font-size:12.5px}
+.wrap{max-width:1400px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.top{background:var(--navy);color:var(--on-navy)}
+.top .wrap{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding-block:12px}
+.brand{display:flex;gap:10px;align-items:center;margin-right:auto}
+.logo{width:34px;height:34px;border-radius:8px;background:var(--navy-2);display:grid;place-items:center;color:#f0a58f}
+.brand b{font:700 18px/1 var(--f-display)} .brand small{display:block;color:#f0a58f;font-size:12px;margin-top:3px}
+.top a{color:var(--on-navy-muted);font-size:13px;text-decoration:none} .top a:hover{color:var(--on-navy)}
+.pill{font:600 11px/1 var(--f-mono);padding:4px 7px;border-radius:5px;letter-spacing:.04em}
+.pill.live{background:#1f5c3f;color:#c9f1db} .pill.mock{background:var(--red);color:#fff} .pill.snapshot{background:#6a4a12;color:#fde7bf}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 12px;font-weight:600;font-size:13px}
+.btn.primary{background:var(--primary);color:var(--on-primary);border-color:var(--primary)} .btn.go{background:var(--good);color:#fff;border-color:var(--good)}
+.btn.ghost{background:transparent} .btn:disabled{opacity:.55;cursor:default}
+.picker{padding-block:14px;display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+.pick-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pick-row input{border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:var(--surface);width:200px;max-width:100%}
+.recent{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
+.rc{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 10px;font-size:12.5px;display:flex;gap:6px;align-items:center}
+.rc:hover,.rc.on{border-color:var(--red)} .rc b{font-family:var(--f-mono);font-weight:500}
+.grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:14px;padding-bottom:28px;align-items:start}
+.col{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;grid-template-columns:minmax(0,1fr);gap:10px;min-width:0}
+.card h3{font-size:15px} .kicker{font:500 11px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--red)}
+.empty{padding:40px 16px;text-align:center;color:var(--muted)}
+.verdict{border-radius:12px;padding:14px 16px;display:grid;gap:4px;background:var(--tint);color:var(--teal-ink)}
+.verdict.weak{background:var(--amber-soft);color:var(--amber)} .verdict b{font:700 17px/1.3 var(--f-display)}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.m{border:1px solid var(--line);border-radius:10px;padding:10px;display:grid;gap:2px}
+.m b{font:700 20px/1.1 var(--f-display);font-variant-numeric:tabular-nums} .m span{font-size:12px;color:var(--muted)}
+.hyp{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:6px}
+.hyp.lead{border-color:var(--red);background:color-mix(in srgb,var(--red-soft) 45%,var(--surface))}
+.hyp-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.cat{font:600 10.5px/1 var(--f-mono);padding:3px 6px;border-radius:4px;background:var(--sunk);color:var(--muted)}
+.conf{height:6px;border-radius:3px;background:var(--sunk);overflow:hidden} .conf i{display:block;height:100%;background:var(--teal)} .hyp.lead .conf i{background:var(--red)}
+.hyp ul{margin:0;padding-left:18px;font-size:13px;display:grid;gap:2px}
+.chips{display:flex;flex-wrap:wrap;gap:4px} .ev{font:500 11px/1 var(--f-mono);padding:4px 6px;border-radius:5px;background:var(--red-soft);color:var(--red)}
+.pct{font:600 12px var(--f-mono)}
+.tl{list-style:none;margin:0;padding:0;display:grid;gap:4px;font-size:12.5px}
+.tl li{display:grid;grid-template-columns:120px 84px minmax(0,1fr);gap:8px;align-items:baseline}
+.k{font:600 10px/1 var(--f-mono);text-transform:uppercase;padding:3px 5px;border-radius:4px;background:var(--sunk);color:var(--muted);text-align:center}
+.k-change,.k-deployment,.k-commit{background:var(--amber-soft);color:var(--amber)} .k-incident{background:var(--red);color:#fff}
+.k-related{background:var(--red-soft);color:var(--red)} .k-observation{background:var(--tint);color:var(--teal-ink)}
+.tblwrap{overflow-x:auto} table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top} th{font:600 11px var(--f-mono);color:var(--muted);text-transform:uppercase}
+.cov{display:grid;gap:6px}
+.dom{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.dom b{font-size:13px} .dom .small{grid-column:1/3}
+.st{font:600 10.5px/1 var(--f-mono);padding:4px 7px;border-radius:999px;text-transform:uppercase;white-space:nowrap}
+.st.connected{background:var(--good-soft);color:var(--good)} .st.planned{background:var(--amber-soft);color:var(--amber)} .st.not_connected{background:var(--sunk);color:var(--muted);border:1px solid var(--line)}
+.form{display:grid;gap:8px} .form textarea,.form input{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface);width:100%}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.alert{background:var(--red-soft);color:var(--red);border-radius:10px;padding:10px 12px;font-weight:500;font-size:13px}
+.note{font-size:12.5px;color:var(--muted)}
+.report{border:1px solid var(--line);border-radius:10px;padding:12px 14px;max-height:620px;overflow:auto;background:var(--sunk)}
+.report h1{font-size:18px;margin-bottom:4px} .report h2{font-size:15px;margin:14px 0 6px;color:var(--teal-ink)} .report p{margin:4px 0}
+.report ul,.report ol{margin:4px 0;padding-left:20px} .report table{background:var(--surface);margin:4px 0}
+.approval{overflow-wrap:anywhere;border:2px solid var(--amber);background:var(--amber-soft);border-radius:12px;padding:12px;display:grid;gap:8px}
+.approval.done{border-color:var(--line);background:var(--sunk)}
+.kv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 12px;font-size:12.5px} .kv span{color:var(--muted)} .kv b{font-weight:500;white-space:pre-wrap;overflow-wrap:anywhere}
+.chat{display:grid;gap:8px;max-height:360px;overflow:auto}
+.msg{padding:8px 12px;border-radius:12px;font-size:13px;overflow-wrap:anywhere} .msg.u{background:var(--primary);color:var(--on-primary);justify-self:end;max-width:85%}
+.msg.a{background:var(--sunk);border:1px solid var(--line)} .msg p{margin:0 0 4px}
+@media (max-width:980px){.grid{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.tl li{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <div class="brand"><div class="logo" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5M8.5 11h5M11 8.5v5"/></svg></div>
+    <div><b>AIOps RCA</b><small>Root cause analysis agent</small></div></div>
+  <span id="src" class="small"></span>
+  <a href="/">← Incident console</a>
+</div></header>
+
+<div class="wrap picker">
+  <form class="pick-row" id="pick">
+    <input id="num" placeholder="INC number" aria-label="Incident number" autocomplete="off">
+    <button class="btn primary" type="submit" id="go">Investigate</button>
+    <span class="note">Evidence from ServiceNow today; Git, releases and MELT plug in as sources.</span>
+  </form>
+  <div class="recent" id="recent"></div>
+</div>
+
+<main class="wrap grid">
+  <section class="col" id="left">
+    <div class="card empty" id="placeholder">Pick a P1/P2 above or type an incident number, then <b>Investigate</b>.</div>
+  </section>
+  <aside class="col">
+    <div class="card"><span class="kicker">Evidence coverage</span><div class="cov" id="coverage"><p class="note">Loading…</p></div></div>
+    <div class="card"><span class="kicker">Add an observation</span>
+      <form class="form" id="obs">
+        <textarea id="obs-text" rows="3" placeholder="What did a dashboard, log search or trace show? e.g. eligibility-svc 5xx rose from 0.3% to 7% at 02:08 UTC"></textarea>
+        <div class="row"><input id="obs-time" placeholder="UTC time it refers to (YYYY-MM-DD HH:MM), optional" style="flex:1;min-width:0">
+          <button class="btn" type="submit">Add as evidence</button></div>
+        <span class="note" id="obs-msg">Cited as OBS-n in the report. Re-ranks the causes.</span>
+      </form>
+    </div>
+    <div class="card"><div class="row" style="justify-content:space-between"><span class="kicker">RCA report</span>
+      <div class="row"><button class="btn primary" id="draft" type="button" disabled>Draft report</button>
+        <button class="btn" id="copy" type="button" disabled>Copy Markdown</button>
+        <button class="btn" id="publish" type="button" disabled>Publish to ServiceNow…</button></div></div>
+      <div id="report"><p class="note">Follows the AIOps RCA template: summary, impact, metrics, timeline, root cause, hypotheses, contributing factors, 5 whys, evidence, coverage, CAPA, lessons, open questions, sign-off.</p></div>
+    </div>
+    <div class="card"><span class="kicker">Ask the RCA agent</span>
+      <div class="chat" id="chat"></div>
+      <form class="row" id="ask"><input id="ask-text" placeholder="e.g. What would rule out the change?" style="flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface)">
+        <button class="btn primary" type="submit">Ask</button></form>
+    </div>
+  </aside>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+let current = null, lastMd = "";
+const thread = "rca-" + Math.random().toString(36).slice(2, 8);
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  let d = {}; try { d = await r.json(); } catch { /* empty */ }
+  if (!r.ok) throw new Error(d.error || d.detail || `Request failed (${r.status})`);
+  return d;
+}
+function inline(s) { return esc(s).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])_([^_]+)_/g, "$1<em>$2</em>"); }
+function md(text) {
+  const lines = String(text || "").split("\n"); const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (/^\s*\|/.test(l)) {
+      const rows = []; while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(lines[i++]); i--;
+      const cells = (r) => r.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      const body = rows.filter((r, j) => j > 0 && !/^\s*\|?\s*:?-{2,}/.test(r));
+      out.push(`<div class="tblwrap"><table><thead><tr>${cells(rows[0]).map((c) => `<th>${inline(c)}</th>`).join("")}</tr></thead><tbody>${body.map((r) => `<tr>${cells(r).map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
+    } else if (/^# /.test(l)) out.push(`<h1>${inline(l.slice(2))}</h1>`);
+    else if (/^#{2,4} /.test(l)) out.push(`<h2>${inline(l.replace(/^#+ /, ""))}</h2>`);
+    else if (/^\s*[-*] /.test(l)) { const it = []; while (i < lines.length && /^\s*[-*] /.test(lines[i])) it.push(`<li>${inline(lines[i++].replace(/^\s*[-*] /, ""))}</li>`); i--; out.push(`<ul>${it.join("")}</ul>`); }
+    else if (/^\s*\d+\. /.test(l)) { const it = []; while (i < lines.length && /^\s*\d+\. /.test(lines[i])) it.push(`<li>${inline(lines[i++].replace(/^\s*\d+\. /, ""))}</li>`); i--; out.push(`<ol>${it.join("")}</ol>`); }
+    else if (l.trim()) out.push(`<p>${inline(l)}</p>`);
+  }
+  return out.join("");
+}
+function fmtH(h) { return h == null ? "—" : h < 1 ? `${Math.round(h * 60)}m` : `${h.toFixed(1)}h`; }
+
+async function boot() {
+  try {
+    const h = await api("/api/health");
+    const lab = { live: "LIVE", snapshot: "SNAPSHOT", mock: "MOCK DATA" }[h.mode] || h.mode;
+    $("#src").innerHTML = `<span class="pill ${esc(h.mode)}">${esc(lab)}</span> ${esc((h.instance || "").replace(/^https?:\/\//, ""))} · ${esc(h.model || "")}`;
+  } catch { $("#src").textContent = "server offline"; }
+  try {
+    const rows = await api("/api/incidents?priority=" + encodeURIComponent("<=2") + "&active_only=false&limit=15");
+    $("#recent").innerHTML = rows.map((r) => `<button class="rc" type="button" data-n="${esc(r.number)}"><b>${esc(r.number)}</b><span>P${esc(String(r.priority || "").slice(0, 1))}</span><span class="muted">${esc((r.short_description || "").slice(0, 40))}</span></button>`).join("") || '<span class="note">No P1/P2 incidents found.</span>';
+  } catch (e) { $("#recent").innerHTML = `<span class="alert">${esc(e.message)}</span>`; }
+  loadCoverage();
+  const h = (location.hash || "").slice(1).toUpperCase();
+  if (/^INC\d{7}$/.test(h)) { $("#num").value = h; investigate(h); }
+}
+async function loadCoverage(cov) {
+  try {
+    cov = cov || await api("/api/rca-agent/coverage" + (current ? "?number=" + current : ""));
+    $("#coverage").innerHTML = cov.map((c) => `<div class="dom"><b>${esc(c.label)}${c.evidence_items ? ` · ${c.evidence_items}` : ""}</b><span class="st ${esc(c.state)}">${esc(c.state.replace("_", " "))}</span>
+      <span class="small muted">${esc(c.sources.map((s) => `${s.label}: ${s.detail}`).join(" · "))}</span></div>`).join("");
+  } catch (e) { $("#coverage").innerHTML = `<div class="alert">${esc(e.message)}</div>`; }
+}
+async function investigate(n) {
+  n = n.trim().toUpperCase(); if (!n) return;
+  current = n; location.hash = n;
+  document.querySelectorAll(".rc").forEach((b) => b.classList.toggle("on", b.dataset.n === n));
+  $("#left").innerHTML = `<div class="card"><p class="note">Investigating ${esc(n)}: collecting evidence from every source…</p></div>`;
+  $("#go").disabled = true;
+  try { render(await api("/api/rca-agent/investigate", { number: n })); }
+  catch (e) { $("#left").innerHTML = `<div class="card"><div class="alert">${esc(e.message)}</div></div>`; }
+  finally { $("#go").disabled = false; }
+}
+function render(r) {
+  const h = r.header, m = r.metrics;
+  $("#draft").disabled = false; $("#publish").disabled = false;
+  const hyps = r.hypotheses.map((x, i) => `<div class="hyp ${i === 0 && r.sufficient_evidence ? "lead" : ""}">
+      <div class="hyp-head"><b>${esc(x.title)}</b><span class="pct">${Math.round(x.confidence * 100)}%</span></div>
+      <div class="conf"><i style="width:${Math.round(x.confidence * 100)}%"></i></div>
+      <div class="row"><span class="cat">${esc(x.category || "")}</span></div>
+      <ul>${x.reasons.map((y) => `<li>${esc(y)}</li>`).join("")}</ul>
+      <div class="chips">${x.evidence.filter(Boolean).map((e) => `<span class="ev">${esc(e)}</span>`).join("")}</div>
+      <span class="note">Next: ${esc(x.action)}</span></div>`).join("") || '<p class="note">No hypotheses yet. Add observations or connect more sources.</p>';
+  $("#left").innerHTML = `
+    <div class="card"><span class="kicker">${esc(h.number)} · ${esc(h.priority || "")} · ${esc(h.state || "")}</span>
+      <h3>${esc(h.short_description || "")}</h3>
+      <span class="note">CI ${esc(h.cmdb_ci || "—")} · ${esc(h.assignment_group || "no group")} · ${esc(h.assigned_to || "unassigned")} · opened ${esc(h.opened || "—")} UTC</span>
+      <div class="verdict ${r.sufficient_evidence ? "" : "weak"}"><b>${esc(r.verdict)}</b><span class="small">${r.sufficient_evidence ? "Ranked from the evidence below." : "Add observations or connect sources to strengthen the analysis."}</span></div>
+      <div class="metrics">
+        <div class="m"><b>${fmtH(m.time_to_detect_h)}</b><span>time to detect</span></div>
+        <div class="m"><b>${fmtH(m.time_to_acknowledge_h)}</b><span>time to acknowledge</span></div>
+        <div class="m"><b>${fmtH(m.time_to_mitigate_h)}</b><span>time to mitigate</span></div>
+        <div class="m"><b>${m.time_to_resolve_h != null ? fmtH(m.time_to_resolve_h) : (m.open_for_h != null ? "open " + fmtH(m.open_for_h) : "—")}</b><span>time to resolve</span></div>
+      </div><span class="note">${esc(m.note)}</span></div>
+    <div class="card"><span class="kicker">Hypotheses</span>${hyps}</div>
+    <div class="card"><span class="kicker">Timeline (UTC)</span><ul class="tl">${r.timeline.map((e) => `<li><span class="mono">${esc(e.time.slice(0, 16))}</span><span class="k k-${esc(e.kind)}">${esc(e.kind)}</span><span>${esc(e.text)}</span></li>`).join("") || '<li class="note">No events.</li>'}</ul></div>
+    <div class="card"><details><summary><span class="kicker">Evidence (${r.evidence.length})</span></summary>
+      <div class="tblwrap"><table><thead><tr><th>Id</th><th>Source</th><th>Kind</th><th>Finding</th><th>Time</th></tr></thead><tbody>
+      ${r.evidence.map((e) => `<tr><td class="mono">${esc(e.id)}</td><td>${esc(e.source)}</td><td>${esc(e.kind)}</td><td>${esc(e.title)}</td><td class="mono">${esc((e.time_raw || "").slice(0, 16))}</td></tr>`).join("")}
+      </tbody></table></div></details>
+      ${r.evidence_gaps.length ? `<span class="note"><b>Evidence gaps:</b> ${esc(r.evidence_gaps.join(" "))}</span>` : ""}</div>`;
+  loadCoverage(r.coverage);
+}
+async function draft() {
+  if (!current) return;
+  $("#draft").disabled = true; $("#report").innerHTML = `<p class="note">Writing the report from the evidence…</p>`;
+  try {
+    const r = await api("/api/rca-agent/draft", { number: current });
+    lastMd = r.markdown; $("#copy").disabled = false;
+    $("#report").innerHTML = `<span class="note">Narrative: ${esc(r.narrative_source === "llm" ? "LLM, from evidence" : "template (no LLM)")}</span><div class="report">${md(r.markdown)}</div>`;
+    render(r);
+  } catch (e) { $("#report").innerHTML = `<div class="alert">${esc(e.message)}</div>`; }
+  finally { $("#draft").disabled = false; }
+}
+async function copyMd() {
+  try { await navigator.clipboard.writeText(lastMd); $("#copy").textContent = "Copied"; }
+  catch { const t = document.createElement("textarea"); t.value = lastMd; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); $("#copy").textContent = "Copied"; }
+  setTimeout(() => ($("#copy").textContent = "Copy Markdown"), 1500);
+}
+function approvalCard(p, container) {
+  const el = document.createElement("div"); el.className = "approval";
+  el.innerHTML = `<b>Approve: ${esc(p.action)}</b><div class="kv">${Object.entries(p.details).map(([k, v]) => `<span>${esc(k)}</span><b>${esc(v)}</b>`).join("")}</div>
+    <div class="row"><button class="btn go" data-a="1" type="button">Approve and publish</button><button class="btn ghost" data-a="0" type="button">Reject</button></div>`;
+  el.querySelectorAll("[data-a]").forEach((b) => b.onclick = async () => {
+    el.querySelectorAll("button").forEach((x) => x.disabled = true);
+    try { const res = await api("/api/rca-agent/approve", { id: p.id, approved: b.dataset.a === "1" });
+      el.classList.add("done"); el.innerHTML = `<b>${b.dataset.a === "1" ? "Published" : "Rejected"}</b><span class="note mono">${esc(res.result)}</span>`;
+    } catch (e) { el.insertAdjacentHTML("beforeend", `<div class="alert">${esc(e.message)}</div>`); }
+  });
+  container.prepend(el);
+}
+async function publish() {
+  if (!current) return;
+  try { const r = await api("/api/rca-agent/publish", { number: current }); (r.pending || []).forEach((p) => approvalCard(p, $("#report"))); if (!r.pending?.length) $("#report").insertAdjacentHTML("afterbegin", `<p class="note">${esc(r.output)}</p>`); }
+  catch (e) { $("#report").insertAdjacentHTML("afterbegin", `<div class="alert">${esc(e.message)}</div>`); }
+}
+async function addObs(ev) {
+  ev.preventDefault();
+  if (!current) { $("#obs-msg").textContent = "Investigate an incident first."; return; }
+  try {
+    const o = await api("/api/rca-agent/observation", { number: current, text: $("#obs-text").value, at_utc: $("#obs-time").value });
+    $("#obs-msg").textContent = `Recorded ${o.id}. Re-ranking…`; $("#obs-text").value = ""; $("#obs-time").value = "";
+    await investigate(current);
+    $("#obs-msg").textContent = `Recorded ${o.id}. Cited as ${o.id} in the report.`;
+  } catch (e) { $("#obs-msg").textContent = e.message; }
+}
+async function ask(ev) {
+  ev.preventDefault();
+  const text = $("#ask-text").value.trim(); if (!text) return;
+  const q = current && !/INC\d{7}/i.test(text) ? `${text} (incident ${current})` : text;
+  $("#chat").insertAdjacentHTML("beforeend", `<div class="msg u">${esc(text)}</div>`); $("#ask-text").value = "";
+  const w = document.createElement("div"); w.className = "msg a note"; w.textContent = "Thinking…"; $("#chat").appendChild(w);
+  try { const r = await api("/api/rca-agent/chat", { message: q, thread_id: thread });
+    w.className = "msg a"; w.innerHTML = md(r.reply || "");
+    (r.pending || []).forEach((p) => approvalCard(p, $("#report")));
+  } catch (e) { w.className = "msg a"; w.innerHTML = `<div class="alert">${esc(e.message)}</div>`; }
+  $("#chat").scrollTop = $("#chat").scrollHeight;
+}
+$("#pick").onsubmit = (e) => { e.preventDefault(); investigate($("#num").value); };
+$("#recent").onclick = (e) => { const b = e.target.closest("[data-n]"); if (b) { $("#num").value = b.dataset.n; investigate(b.dataset.n); } };
+$("#draft").onclick = draft; $("#copy").onclick = copyMd; $("#publish").onclick = publish;
+$("#obs").onsubmit = addObs; $("#ask").onsubmit = ask;
+boot();
+</script>
+</body>
+</html>

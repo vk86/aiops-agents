@@ -1,0 +1,72 @@
+{
+  "_comment": "Copy to aiops_config.json. service_map: platform name -> CMDB CI. kpis: business KPIs. slos: SLO definitions (Dynatrace SLO id or Splunk good/total search). change_policy: freeze windows, peak hours, critical services.",
+  "service_map": {
+    "EnrollmentService": "enrollment-api",
+    "Submit Enrollment": "enrollment-api",
+    "eligibility": "eligibility-svc"
+  },
+  "kpis": [
+    {
+      "name": "Enrollments per minute",
+      "service": "enrollment-api",
+      "source": "dynatrace",
+      "metric": "calc:service.enrollmentsubmitted:splitBy():sum:names",
+      "direction": "down",
+      "drop_pct": 20,
+      "unit": "/min"
+    }
+  ],
+  "slos": [
+    {
+      "service": "enrollment-api",
+      "name": "Enrollment submit availability",
+      "sli": "availability",
+      "objective": 99.9,
+      "window_days": 28,
+      "dynatrace_slo_id": "replace-with-dynatrace-slo-id"
+    },
+    {
+      "service": "eligibility-svc",
+      "name": "Eligibility check latency < 300 ms",
+      "sli": "latency",
+      "objective": 99.0,
+      "window_days": 28,
+      "splunk_search": "search index=app service=eligibility-svc earliest={earliest} latest={latest} | stats count(eval(duration_ms<300)) as good, count as total"
+    }
+  ],
+  "change_policy": {
+    "freeze_windows": [
+      {
+        "name": "Open enrollment",
+        "from": "2026-11-01",
+        "to": "2026-12-15",
+        "services": [
+          "Member Enrollment"
+        ],
+        "allow": "reliability fixes only"
+      }
+    ],
+    "peak_hours": "08-18",
+    "peak_days": "Mon-Fri",
+    "timezone": "America/Chicago",
+    "critical_services": [
+      "Member Enrollment",
+      "Premium Payments",
+      "Claims Processing"
+    ]
+  },
+  "alm": {
+    "synthogen_projects": [
+      "ENRL",
+      "PLAT"
+    ],
+    "synthogen_systems": [
+      "jira",
+      "rally",
+      "rtc"
+    ],
+    "jira_projects": [],
+    "rally_projects": [],
+    "ado_projects": []
+  }
+}

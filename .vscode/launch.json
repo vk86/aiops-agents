@@ -1,0 +1,85 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "1. Check ServiceNow connection",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/check_servicenow.py",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "2. Web UI (http://localhost:8001)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "incident_agent.api:app",
+        "--port",
+        "8001",
+        "--reload"
+      ],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "serverReadyAction": {
+        "pattern": "Uvicorn running on (https?://\\S+)",
+        "uriFormat": "%s",
+        "action": "openExternally"
+      }
+    },
+    {
+      "name": "3. Web UI on mock data (offline ServiceNow)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "incident_agent.api:app",
+        "--port",
+        "8001",
+        "--reload"
+      ],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src",
+        "SERVICENOW_MODE": "mock"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "serverReadyAction": {
+        "pattern": "Uvicorn running on (https?://\\S+)",
+        "uriFormat": "%s",
+        "action": "openExternally"
+      }
+    },
+    {
+      "name": "4. Terminal chat",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "incident_agent.cli",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "5. Terminal chat on mock data",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "incident_agent.cli",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src",
+        "SERVICENOW_MODE": "mock"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    }
+  ]
+}

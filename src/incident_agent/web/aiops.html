@@ -1,0 +1,1955 @@
+<!doctype html>
+<html lang="en" data-brand="ddat">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIOps</title>
+<script>(function(){let b="ddat";try{const q=new URLSearchParams(location.search).get("brand");if(q)localStorage.setItem("aiops-brand",q);b=q||localStorage.getItem("aiops-brand")||"ddat"}catch(e){}if(b!=="classic")document.documentElement.dataset.brand=b})()</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* AIOps: top bar with agent switch (Incident | RCA) → chat for that agent (left) | its workspace tabs (right). Phone: one pane at a time. */
+:root{
+  --navy:#1e2a3d; --navy-2:#2a3850; --ink:#1c2533; --muted:#5f6b7a; --line:#dbe1e7;
+  --bg:#eef2f4; --surface:#ffffff; --sunk:#f5f7f9; --tint:#e6f1f0;
+  --teal:#1d7a73; --teal-ink:#145c56; --red:#b4513f; --red-soft:#f8e8e3; --amber:#a86a12; --amber-soft:#fcf1dd;
+  --good:#1f7a4d; --good-soft:#e2f2e9; --on-navy:#e9eef4; --on-navy-muted:#9fb3c6;
+  --primary:#1e2a3d; --on-primary:#e9eef4;
+  --f-display:"Space Grotesk",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-brand="ddat"]){
+  --navy:#0f1823; --navy-2:#1a2636; --ink:#e3e9ef; --muted:#9aa8b6; --line:#2b3949;
+  --bg:#0b121b; --surface:#131e2b; --sunk:#0f1925; --tint:#12302d;
+  --teal:#41b3a9; --teal-ink:#73d1c7; --red:#e48a75; --red-soft:#3a231f; --amber:#e3ab5c; --amber-soft:#33281a;
+  --good:#5fc490; --good-soft:#14301f; --primary:#3a9d94; --on-primary:#06201d; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 var(--f-body);display:flex;flex-direction:column}
+h1,h2,h3,h4{font-family:var(--f-display);margin:0;letter-spacing:-.01em}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.mono{font-family:var(--f-mono);font-size:.92em}
+.muted{color:var(--muted)}
+.small{font-size:12.5px}
+
+/* top bar */
+.top{background:var(--navy);color:var(--on-navy);display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px))}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.brand .logo{width:32px;height:32px;border-radius:8px;background:var(--navy-2);display:grid;place-items:center;color:#7fd3c9}
+.brand b{font:700 17px/1 var(--f-display)} .brand small{display:block;color:#7fd3c9;font-size:12px;margin-top:3px}
+.stat{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--on-navy-muted);white-space:nowrap}
+.stat b{color:var(--on-navy);font-weight:500}
+.led{width:8px;height:8px;border-radius:50%;background:var(--on-navy-muted)}
+.led.ok{background:#4fd18b}.led.bad{background:#f07a62}.led.warn{background:#f2b750}
+
+/* panes */
+.panes{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px;
+  padding:14px max(14px,env(safe-area-inset-right,0px)) 14px max(14px,env(safe-area-inset-left,0px))}
+.pane{background:var(--surface);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;min-height:0;min-width:0}
+.pane-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.pane-head h2{font-size:15px;margin-right:auto}
+.mobile-tabs{display:none}
+
+/* chat */
+.msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+.msg{max-width:88%;display:grid;gap:6px}
+.msg.user{align-self:flex-end}
+.msg.user .bubble{background:var(--primary);color:var(--on-primary);border-radius:14px 14px 4px 14px}
+.msg.bot .bubble{background:var(--sunk);border:1px solid var(--line);border-radius:14px 14px 14px 4px}
+.bubble{padding:10px 14px;overflow-wrap:anywhere}
+.bubble p{margin:0 0 6px}.bubble p:last-child{margin:0}
+.bubble ul,.bubble ol{margin:4px 0 8px;padding-left:20px}
+.bubble h3,.bubble h4{font-size:14px;margin:8px 0 4px}
+.bubble code{font-family:var(--f-mono);font-size:12.5px;background:var(--tint);color:var(--teal-ink);padding:1px 5px;border-radius:4px}
+.bubble table{border-collapse:collapse;margin:6px 0;font-size:13px;display:block;overflow-x:auto}
+.bubble th,.bubble td{border:1px solid var(--line);padding:4px 8px;text-align:left}
+.inc-link{font-family:var(--f-mono);font-size:12.5px;color:var(--teal-ink);background:var(--tint);border:0;border-radius:4px;padding:1px 5px}
+.inc-link:hover{text-decoration:underline}
+.trail{display:flex;flex-wrap:wrap;gap:6px}
+.trail details{font-size:12px}
+.trail summary{list-style:none;cursor:pointer;font-family:var(--f-mono);font-size:11.5px;padding:4px 8px;border-radius:6px;background:var(--tint);color:var(--teal-ink)}
+.trail summary.w{background:var(--amber-soft);color:var(--amber)}
+.trail summary::-webkit-details-marker{display:none}
+.trail pre{margin:4px 0 0;font:11.5px/1.4 var(--f-mono);background:var(--sunk);border:1px solid var(--line);border-radius:6px;padding:6px 8px;white-space:pre-wrap;max-width:420px}
+.typing{color:var(--muted);font-size:13px;display:flex;align-items:center;gap:8px}
+.typing i{width:6px;height:6px;border-radius:50%;background:var(--teal);animation:blink 1s infinite alternate}
+.typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+@keyframes blink{from{opacity:.25}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.typing i{animation:none}}
+.empty{margin:auto;text-align:center;max-width:46ch;display:grid;gap:8px;padding:24px}
+.empty h3{font-size:18px}
+
+/* approval card */
+.approval{border:2px solid var(--amber);background:var(--amber-soft);border-radius:12px;padding:12px 14px;display:grid;gap:8px;max-width:88%}
+.approval h4{font-size:14px;display:flex;gap:8px;align-items:center}
+.approval h4::before{content:"!";width:18px;height:18px;border-radius:50%;background:var(--amber);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700}
+.approval.done{border-color:var(--line);background:var(--sunk)}
+.approval.done h4::before{background:var(--good);content:"✓"}
+.approval.no h4::before{background:var(--muted);content:"×"}
+.kv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;font-size:13px}
+.kv span{color:var(--muted)} .kv b{font-weight:500;overflow-wrap:anywhere;white-space:pre-wrap}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 12px;font-weight:600;font-size:13px}
+a.btn{text-decoration:none;color:var(--ink);display:inline-flex;align-items:center}
+.btn.primary{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+.btn.go{background:var(--good);color:#fff;border-color:var(--good)}
+.btn.ghost{background:transparent}
+.btn:disabled{opacity:.55;cursor:default}
+
+/* composer */
+.composer{border-top:1px solid var(--line);padding:10px 12px;display:grid;gap:8px}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:thin}
+.chip{flex:none;border:1px solid var(--line);background:var(--sunk);border-radius:999px;padding:5px 10px;font-size:12.5px}
+.chip:hover{border-color:var(--teal);color:var(--teal-ink)}
+.input{display:flex;gap:8px;align-items:flex-end}
+.input textarea{flex:1;min-width:0;resize:none;border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--surface);max-height:160px}
+
+/* inspector */
+.tabs{display:flex;gap:4px;margin-right:auto}
+.tab{border:0;background:transparent;padding:6px 10px;border-radius:7px;font-weight:600;color:var(--muted);white-space:nowrap}
+.tab[aria-selected="true"]{background:var(--tint);color:var(--teal-ink)}
+.body{flex:1;overflow-y:auto;padding:14px 16px;display:grid;gap:14px;align-content:start}
+.filters{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center}
+.filters input,.filters select,.form input,.form select,.form textarea{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--surface);min-width:0;width:100%}
+.check{display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--muted);white-space:nowrap}
+.check input{width:auto}
+.list{display:grid;gap:6px}
+.item{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 10px;align-items:center;text-align:left;
+  border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 12px;width:100%}
+.item:hover,.item.on{border-color:var(--teal)}
+.item .num{font-family:var(--f-mono);font-size:12.5px;font-weight:500}
+.item .sd{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .meta{grid-column:2/4;font-size:12px;color:var(--muted)}
+.prio{font:600 11px/1 var(--f-mono);padding:4px 6px;border-radius:5px;background:var(--sunk);color:var(--muted);white-space:nowrap}
+.prio.p1{background:var(--red);color:#fff}.prio.p2{background:var(--red-soft);color:var(--red)}.prio.p3{background:var(--amber-soft);color:var(--amber)}
+.state{font-size:12px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
+.detail{border-top:1px solid var(--line);padding-top:14px;display:grid;gap:12px}
+.detail-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.detail-head h3{font-size:16px;flex-basis:100%}
+.desc{background:var(--sunk);border-radius:8px;padding:10px 12px;font-size:13px;white-space:pre-wrap}
+.sec h4{font:600 11.5px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.tl{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.tl li{border-left:3px solid var(--teal);padding:2px 0 2px 10px;font-size:13px}
+.tl li.comment{border-color:var(--amber)}
+.tl small{display:block;color:var(--muted);font-size:11.5px}
+.card{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;display:grid;gap:2px}
+.alert{background:var(--red-soft);color:var(--red);border-radius:10px;padding:10px 12px;font-size:13px;font-weight:500}
+.note{font-size:12.5px;color:var(--muted)}
+
+.form{display:grid;gap:10px}
+.form label{display:grid;gap:4px;font-size:12.5px;color:var(--muted)}
+.form label b{color:var(--ink);font-weight:600;font-family:var(--f-mono);font-size:12.5px}
+.out{margin:0;font:12px/1.45 var(--f-mono);background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:10px 12px;white-space:pre-wrap;overflow-x:auto;max-height:340px}
+.shift-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.shift-head h3{font-size:18px}
+.headline{font-size:14px;font-weight:600;background:var(--tint);color:var(--teal-ink);border-radius:10px;padding:10px 12px}
+.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.kpi{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:2px}
+.kpi b{font:700 22px/1.1 var(--f-display);font-variant-numeric:tabular-nums}
+.kpi span{font-size:12px;color:var(--muted)}
+.kpi.hot b{color:var(--red)} .kpi.warn b{color:var(--amber)}
+.sla{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 10px;align-items:center;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;text-align:left;background:var(--surface);width:100%}
+.sla .bar{height:6px;border-radius:3px;background:var(--sunk);overflow:hidden;grid-column:1/4}
+.sla .bar i{display:block;height:100%;background:var(--amber)} .sla.br .bar i{background:var(--red)}
+.pct{font:600 12px var(--f-mono)} .sla.br .pct{color:var(--red)}
+.ins{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:8px}
+.ins.reco{border-color:var(--teal);background:var(--tint)}
+.person{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;font-size:13px}
+.person b{font-size:14px} .person .note{grid-column:1/3}
+.srcbadge{font:600 10.5px/1 var(--f-mono);padding:3px 6px;border-radius:4px;letter-spacing:.04em}
+.srcbadge.live{background:var(--good-soft);color:var(--good)} .srcbadge.snapshot{background:var(--amber-soft);color:var(--amber)} .srcbadge.mock{background:var(--red);color:#fff}
+@media (max-width:520px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.rca-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.verdict{font-weight:700;font-size:14px}
+.hyp{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:6px}
+.hyp.lead{border-color:var(--red);background:color-mix(in srgb,var(--red-soft) 45%,var(--surface))}
+.hyp-head{display:flex;gap:8px;align-items:baseline;justify-content:space-between}
+.conf{height:6px;border-radius:3px;background:var(--sunk);overflow:hidden}
+.conf i{display:block;height:100%;background:var(--teal)} .hyp.lead .conf i{background:var(--red)}
+.hyp ul{margin:0;padding-left:18px;font-size:13px;display:grid;gap:2px}
+.chipset{display:flex;flex-wrap:wrap;gap:4px}
+.evid{font:500 11px/1 var(--f-mono);padding:4px 6px;border-radius:5px;background:var(--red-soft);color:var(--red);border:0}
+.tl2{list-style:none;margin:0;padding:0;display:grid;gap:4px;font-size:12.5px}
+.tl2 li{display:grid;grid-template-columns:118px 64px minmax(0,1fr);gap:8px;align-items:baseline}
+.tl2 .k{font:600 10px/1 var(--f-mono);text-transform:uppercase;padding:3px 5px;border-radius:4px;background:var(--sunk);color:var(--muted);text-align:center}
+.tl2 .k-change{background:var(--amber-soft);color:var(--amber)} .tl2 .k-incident{background:var(--red);color:#fff} .tl2 .k-related{background:var(--red-soft);color:var(--red)}
+@media (max-width:520px){.tl2 li{grid-template-columns:1fr}}
+.tag{font:600 10.5px/1 var(--f-mono);padding:3px 6px;border-radius:4px;background:var(--amber-soft);color:var(--amber);letter-spacing:.04em}
+
+/* agent switch */
+/* agent row below the header */
+.shell{flex:1;min-height:0;display:flex;flex-direction:column}
+.main{flex:1;display:flex;flex-direction:column;min-height:0;min-width:0}
+.rail{display:flex;align-items:stretch;gap:8px;background:var(--surface);border-bottom:1px solid var(--line);
+  padding:8px max(14px,env(safe-area-inset-right,0px)) 8px max(14px,env(safe-area-inset-left,0px));overflow-x:auto}
+.rail-title{display:none}
+.agents button{--ac:var(--teal);position:relative;flex:0 1 auto;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;
+  padding:6px 12px 6px 6px;display:grid;grid-template-columns:30px auto;gap:9px;align-items:center;text-align:left;min-width:0}
+.agents button[data-agent="rca"]{--ac:var(--red)} .agents button[data-agent="anomaly"]{--ac:var(--amber)} .agents button[data-agent="txn"]{--ac:#5b4bd1}
+.agents button[data-agent="slo"]{--ac:var(--good)} .agents button[data-agent="change"]{--ac:#1f6fb2}
+.agents button:hover{border-color:var(--ac)}
+.agents button[aria-selected="true"]{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 10%,var(--surface));box-shadow:inset 0 -3px 0 var(--ac)}
+.agents .ico{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--ac);background:color-mix(in srgb,var(--ac) 13%,transparent)}
+.agents .ico svg{width:16px;height:16px}
+.agents button[aria-selected="true"] .ico{background:var(--ac);color:#fff}
+.agents .txt{display:grid;gap:0;min-width:0} .agents .txt b{font:600 13.5px/1.2 var(--f-body);white-space:nowrap}
+.agents .txt small{font-size:11.5px;color:var(--muted);line-height:1.25;white-space:nowrap}
+.rail-foot{margin-left:auto;align-self:center;font-size:11px;color:var(--muted);text-align:right;line-height:1.35;max-width:300px;flex:none}
+.rail-foot b{font:600 10px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;margin-right:4px}
+/* ALM composer */
+.btn.alm{border-color:#1f6fb2;color:#1f6fb2} .btn.alm::before{content:"+ ";font-weight:700}
+.hbtn{border:1px solid var(--navy-2);background:var(--navy-2);color:var(--on-navy);border-radius:8px;padding:5px 10px;font-weight:600;font-size:12.5px}
+.hbtn b{background:#1f6fb2;color:#fff;border-radius:999px;padding:1px 7px;margin-left:4px;font-size:11px}
+dialog.alm-dlg{border:0;border-radius:16px;padding:0;width:min(780px,94vw);max-height:92vh;background:var(--surface);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.35);overflow-x:hidden}
+dialog.alm-dlg::backdrop{background:rgba(10,16,24,.55)}
+.alm-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);z-index:1}
+.alm-head h3{font-size:16px;margin-right:auto}
+.alm-body{padding:14px 18px 18px;display:grid;gap:12px;grid-template-columns:minmax(0,1fr)}
+.alm-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.alm-body label{display:grid;gap:4px;font-size:12px;color:var(--muted)}
+.alm-body label.wbline{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink)} .alm-body label.wbline input{width:auto}
+.alm-body input,.alm-body select,.alm-body textarea{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--surface);color:var(--ink);font:inherit;min-width:0;width:100%}
+.alm-body textarea{resize:vertical}
+.typeseg{display:flex;gap:4px;flex-wrap:wrap} .typeseg button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 11px;font-size:12.5px;font-weight:600}
+.typeseg button[aria-pressed="true"]{background:#1f6fb2;border-color:#1f6fb2;color:#fff}
+.evid-box{background:var(--sunk);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:12.5px}
+.evid-box ul{margin:4px 0 0;padding-left:18px}
+.created{border:1px solid var(--good);background:var(--good-soft);border-radius:10px;padding:10px 12px;color:var(--good);font-weight:600}
+@media (max-width:640px){.alm-grid{grid-template-columns:1fr 1fr}}
+/* ===== DDAT brand theme (SynthoGEN / practice look): ?brand=ddat, remembered per browser; ?brand=classic to switch back ===== */
+html[data-brand="ddat"]{color-scheme:light;--surface:#ffffff;--ink:#1c2533;--muted:#5f6b7a;--red:#b4513f;--red-soft:#f8e8e3;--amber:#a86a12;--amber-soft:#fcf1dd;--good:#1f7a4d;--good-soft:#e2f2e9;--navy:#16345a;--navy-2:#1f4573;--primary:#16345a;--on-primary:#f2f6fa;--teal:#1b8178;--teal-ink:#13655e;
+  --tint:#e3f1ef;--bg:#e9eff3;--line:#d6dfe7;--sunk:#f3f6f9;--on-navy:#f2f6fa;--on-navy-muted:#b9c9d9}
+html[data-brand="ddat"] body{background:linear-gradient(180deg,#eef3f6 0%,#e4ecf1 100%)}
+html[data-brand="ddat"] .top{background:linear-gradient(90deg,#132f52 0%,#1a3f6b 60%,#1d4776 100%);padding-top:14px;padding-bottom:14px}
+html[data-brand="ddat"] .brand{gap:14px}
+html[data-brand="ddat"] .brand .logo{width:46px;height:46px;border-radius:50%;background:transparent;border:2px solid rgba(255,255,255,.75);color:#fff;box-shadow:0 0 0 4px rgba(255,255,255,.08)}
+html[data-brand="ddat"] .brand .logo svg{width:22px;height:22px}
+html[data-brand="ddat"] .brand b{font:700 24px/1 var(--f-display);color:#fff;letter-spacing:-.01em}
+html[data-brand="ddat"] .brand small{color:#dbe6f1;font-size:13.5px;margin-top:5px}
+.org-pill,.who{display:none}
+html[data-brand="ddat"] .org-pill{display:inline-flex;align-items:center;gap:6px;font:600 10.5px/1 var(--f-mono);letter-spacing:.12em;color:#9fe0d6;
+  background:rgba(79,209,197,.12);border:1px solid rgba(79,209,197,.35);border-radius:999px;padding:4px 9px;margin-left:8px;vertical-align:4px}
+html[data-brand="ddat"] .org-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:#4fd1c5}
+html[data-brand="ddat"] .who{display:flex;align-items:center;gap:10px;color:#fff;font-weight:600;font-size:14px;white-space:nowrap}
+html[data-brand="ddat"] .who i{font-style:normal;width:34px;height:34px;border-radius:50%;background:#fff;color:#16345a;display:grid;place-items:center;font:700 13px/1 var(--f-body)}
+html[data-brand="ddat"] #st-sn > span:last-child:not(.srcbadge),html[data-brand="ddat"] #st-model{display:none}
+@media (max-width:760px){html[data-brand="ddat"] .who{font-size:0;gap:0;position:absolute;right:16px;top:20px} html[data-brand="ddat"] .top{position:relative} html[data-brand="ddat"] .brand small{display:none} html[data-brand="ddat"] .top{gap:10px}}
+html[data-brand="ddat"] .hbtn{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.25)}
+html[data-brand="ddat"] .hbtn b{background:#4fd1c5;color:#0d2a28}
+html[data-brand="ddat"] .rail{background:#fff;gap:2px;padding-top:0;padding-bottom:0;border-bottom:1px solid var(--line)}
+html[data-brand="ddat"] .agents button{border:0;border-radius:0;background:transparent;padding:12px 16px 11px 10px;box-shadow:inset 0 -3px 0 transparent}
+html[data-brand="ddat"] .agents button:hover{background:#f4f8fb}
+html[data-brand="ddat"] .agents button .txt b{color:#3d4b5c;font-size:14.5px}
+html[data-brand="ddat"] .agents button[aria-selected="true"]{background:transparent;box-shadow:inset 0 -3px 0 #2b6cb0}
+html[data-brand="ddat"] .agents button[aria-selected="true"] .txt b{color:#1f5fa3}
+html[data-brand="ddat"] .agents .ico{border-radius:10px}
+html[data-brand="ddat"] .pane{border-radius:16px;border-color:#dbe3ea;box-shadow:0 1px 2px rgba(22,52,90,.05),0 8px 24px rgba(22,52,90,.05);position:relative;overflow:hidden}
+html[data-brand="ddat"] .pane::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:#1b8178;z-index:1}
+html[data-brand="ddat"] .pane + .pane::before{background:#4c5fd0}
+html[data-brand="ddat"] .pane-head{padding:14px 18px}
+html[data-brand="ddat"] .pane-head h2{font-size:16px;color:#16345a}
+html[data-brand="ddat"] .tab{border-radius:0;padding:8px 10px;box-shadow:inset 0 -2px 0 transparent}
+html[data-brand="ddat"] .tab[aria-selected="true"]{background:transparent;color:#1f5fa3;box-shadow:inset 0 -2px 0 #2b6cb0}
+html[data-brand="ddat"] .btn.primary{background:#16345a;border-color:#16345a;box-shadow:0 2px 6px rgba(22,52,90,.25)}
+html[data-brand="ddat"] .btn.alm{border-color:#c8691c;color:#a4540f;background:#fff7ef}
+html[data-brand="ddat"] .chip{background:#fff;border-color:#d6dfe7;border-radius:10px}
+html[data-brand="ddat"] .msg.user .bubble{background:#16345a}
+@media (max-width:1700px){.rail-foot{display:none}}
+@media (max-width:1560px){.agents .txt small{display:none} .agents button{padding:5px 12px 5px 5px}}
+/* reliability + change guard */
+.slo{border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;gap:8px;background:var(--surface)}
+.slo.page{border-color:var(--red)} .slo.ticket{border-color:var(--amber)}
+.slo-head{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap} .slo-head b{font:600 14px var(--f-mono)} .slo-head .grow{margin-right:auto}
+.stb{font:700 10.5px/1 var(--f-mono);padding:4px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:.04em}
+.stb.page,.stb.HOLD,.stb.freeze{background:var(--red);color:#fff} .stb.ticket,.stb.CANARY,.stb.restrict{background:var(--amber-soft);color:var(--amber)}
+.stb.ok,.stb.GO,.stb.normal{background:var(--good-soft);color:var(--good)} .stb.caution{background:var(--amber-soft);color:var(--amber)} .stb.unknown{background:var(--sunk);color:var(--muted)}
+.bud{height:10px;border-radius:5px;background:var(--sunk);overflow:hidden;position:relative}
+.bud i{display:block;height:100%;background:var(--good)} .bud i.mid{background:var(--amber)} .bud i.low{background:var(--red)}
+.bud.ex{background:repeating-linear-gradient(45deg,var(--red-soft),var(--red-soft) 6px,color-mix(in srgb,var(--red) 30%,transparent) 6px,color-mix(in srgb,var(--red) 30%,transparent) 12px)}
+.burns{display:flex;gap:4px;flex-wrap:wrap} .burns span{font:500 11px var(--f-mono);padding:3px 6px;border-radius:5px;background:var(--sunk);color:var(--muted)}
+.burns span.hot{background:var(--red);color:#fff} .burns span.warm{background:var(--amber-soft);color:var(--amber)}
+.bchart{width:100%;height:auto;display:block} .bchart .ln{fill:none;stroke:var(--teal);stroke-width:2} .bchart .zero{stroke:var(--red);stroke-width:1}
+.bchart .band{stroke:var(--line);stroke-dasharray:3 3} .bchart text{font:500 10px var(--f-mono);fill:var(--muted)}
+.bchart .mi{fill:var(--red)} .bchart .mc{fill:var(--amber)}
+.chg{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--surface);text-align:left;width:100%}
+.chg:hover{border-color:var(--teal)} .chg .meta{grid-column:2/4;font-size:12px;color:var(--muted)}
+.score{height:8px;border-radius:4px;background:var(--sunk);overflow:hidden;width:90px} .score i{display:block;height:100%}
+.recb{display:flex;gap:12px;align-items:center;border-radius:12px;padding:12px 14px;flex-wrap:wrap}
+.recb.HOLD{background:var(--red-soft);color:var(--red)} .recb.CANARY{background:var(--amber-soft);color:var(--amber)} .recb.GO{background:var(--good-soft);color:var(--good)}
+.recb .big{font:700 22px/1 var(--f-display);letter-spacing:.02em} .recb b{font-weight:600}
+.fac{display:grid;grid-template-columns:150px 44px minmax(0,1fr);gap:4px 10px;align-items:start;font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--line)}
+.fac .pts{font:600 12px var(--f-mono)} .fac .pts.z{color:var(--muted)} .fac .hh{display:inline-block;font:700 9.5px/1 var(--f-mono);padding:3px 5px;border-radius:4px;background:var(--red);color:#fff;margin-top:3px;white-space:nowrap}
+.fac b{display:grid;justify-items:start}
+.grd{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.grd > div{border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12.5px} .grd ol,.grd ul{margin:4px 0 0;padding-left:18px}
+@media (max-width:640px){.fac{grid-template-columns:1fr}}
+.agent-tag{font:600 10.5px/1 var(--f-mono);padding:3px 6px;border-radius:4px;background:var(--tint);color:var(--teal-ink);letter-spacing:.04em}
+.agent-tag.rca{background:var(--red-soft);color:var(--red)}
+/* RCA workspace */
+.rpick{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.rpick input{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--surface);min-width:0}
+.vbox{border-radius:10px;padding:10px 12px;background:var(--tint);color:var(--teal-ink);display:grid;gap:2px}
+.vbox.weak{background:var(--amber-soft);color:var(--amber)} .vbox b{font:700 15px/1.35 var(--f-display)}
+.kpis.k4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.cat{font:600 10.5px/1 var(--f-mono);padding:3px 6px;border-radius:4px;background:var(--sunk);color:var(--muted);justify-self:start}
+.tl2 .k-deployment,.tl2 .k-commit{background:var(--amber-soft);color:var(--amber)} .tl2 .k-observation{background:var(--tint);color:var(--teal-ink)}
+.tl2 .k-resolved{background:var(--good-soft);color:var(--good)}
+.tblwrap{overflow-x:auto} .tbl{border-collapse:collapse;width:100%;font-size:12.5px}
+.tbl th,.tbl td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl th{font:600 10.5px var(--f-mono);color:var(--muted);text-transform:uppercase}
+.dom{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.dom b{font-size:13px} .dom .note{grid-column:1/3}
+.st{font:600 10.5px/1 var(--f-mono);padding:4px 7px;border-radius:999px;text-transform:uppercase;white-space:nowrap}
+.st.connected{background:var(--good-soft);color:var(--good)} .st.planned{background:var(--amber-soft);color:var(--amber)} .st.not_connected{background:var(--sunk);color:var(--muted);border:1px solid var(--line)}
+.report{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--sunk);overflow-wrap:anywhere}
+.report h4{font-size:14px;margin:12px 0 4px;color:var(--teal-ink)} .report h4:first-child{font-size:16px;margin-top:0;color:var(--ink)}
+.report p{margin:4px 0;font-size:13px} .report ul,.report ol{margin:4px 0;padding-left:20px;font-size:13px}
+.report table{border-collapse:collapse;font-size:12.5px;display:block;overflow-x:auto;margin:4px 0}
+.report th,.report td{border:1px solid var(--line);padding:4px 8px;text-align:left;background:var(--surface)}
+.rc-chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 10px;font-size:12.5px;display:flex;gap:6px;align-items:center}
+.rc-chip b{font:500 12px var(--f-mono)} .rc-chip:hover,.rc-chip.on{border-color:var(--red)}
+.tab .count{font:600 10.5px var(--f-mono);margin-left:4px;color:var(--red)}
+.stack{display:grid;gap:8px}
+/* anomaly + transaction workspaces */
+.aform{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:8px;align-items:end}
+.aform label{display:grid;gap:3px;font-size:12px;color:var(--muted)}
+.aform select,.aform input,.tform input,.tform select{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--surface);min-width:0;width:100%}
+.tform{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.anom{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:8px}
+.anom.high{border-color:var(--red);background:color-mix(in srgb,var(--red-soft) 40%,var(--surface))}
+.anom-head{display:flex;gap:8px;align-items:baseline;justify-content:space-between;flex-wrap:wrap}
+.anom-head b{font-family:var(--f-mono);font-size:13.5px}
+.sev{font:600 10.5px/1 var(--f-mono);padding:3px 6px;border-radius:4px;text-transform:uppercase}
+.sev.high{background:var(--red);color:#fff} .sev.medium{background:var(--amber-soft);color:var(--amber)} .sev.new{background:var(--tint);color:var(--teal-ink)}
+.spark{width:100%;height:34px;display:block} .spark rect{fill:var(--line)} .spark rect.cur{fill:var(--red)}
+.spark-cap{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:-4px}
+.pat{font:600 10.5px/1 var(--f-mono);padding:3px 6px;border-radius:4px;white-space:nowrap}
+.pat.burst{background:var(--red-soft);color:var(--red)} .pat.steady{background:var(--amber-soft);color:var(--amber)} .pat.intermittent{background:var(--sunk);color:var(--muted)}
+.hops{display:grid;gap:6px}
+.hop{border:1px solid var(--line);border-left:4px solid var(--good);border-radius:8px;padding:8px 10px;display:grid;gap:4px;background:var(--surface)}
+.hop.degraded{border-left-color:var(--amber)} .hop.down{border-left-color:var(--red)}
+.hop.origin{box-shadow:0 0 0 2px var(--red) inset}
+.hop-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.hop-head b{font-family:var(--f-mono);font-size:13px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--good);flex:none} .dot.degraded{background:var(--amber)} .dot.down{background:var(--red)}
+.rel{font-size:11.5px;color:var(--muted)}
+.origin-tag{font:600 10.5px/1 var(--f-mono);padding:3px 6px;border-radius:4px;background:var(--red);color:#fff}
+.imp{border:1px solid var(--line);border-radius:10px;padding:8px 12px;display:grid;gap:4px;text-align:left;background:var(--surface);width:100%}
+.imp:hover{border-color:var(--teal)}
+.st.mock{background:var(--red-soft);color:var(--red)}
+.dec{font:600 10.5px/1 var(--f-mono);padding:4px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:.03em}
+.dec.raise{background:var(--red);color:#fff} .dec.attach{background:var(--amber-soft);color:var(--amber)}
+.dec.suppressed{background:var(--sunk);color:var(--muted);border:1px solid var(--line)} .dec.watch{background:var(--tint);color:var(--teal-ink)}
+.anom.attach{border-color:var(--amber)} .anom.suppressed,.anom.watch{opacity:.92}
+.feat{font:500 11px/1 var(--f-mono);padding:4px 6px;border-radius:5px;background:var(--tint);color:var(--teal-ink)}
+.ctx{font-size:12.5px;color:var(--muted)} .ctx b{color:var(--ink);font-weight:600}
+.tbl a{color:var(--teal-ink)}
+.mbanner{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.trk{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto;gap:8px}
+.trk input{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--surface);min-width:0;width:100%}
+.dirb{font:700 11px/1 var(--f-mono);padding:5px 8px;border-radius:5px;letter-spacing:.04em;text-transform:uppercase}
+.dirb.downstream{background:var(--red);color:#fff} .dirb.upstream{background:#5b4bd1;color:#fff} .dirb.same,.dirb.other,.dirb.unknown{background:var(--sunk);color:var(--ink);border:1px solid var(--line)}
+.dirb.ok{background:var(--good);color:#fff}
+.chain{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chain .node{font:500 12px/1 var(--f-mono);padding:6px 8px;border-radius:6px;border:1px solid var(--line);background:var(--surface)}
+.chain .node.error{border-color:var(--red);color:var(--red)} .chain .node.slow{border-color:var(--amber);color:var(--amber)}
+.chain .node.origin{background:var(--red);color:#fff;border-color:var(--red)} .chain .arrow{color:var(--muted)}
+.wf{display:grid;gap:2px}
+.wf-row{display:grid;grid-template-columns:minmax(0,40%) minmax(0,1fr);gap:10px;align-items:center;font-size:12.5px;width:100%;border:0;background:transparent;padding:4px 2px;text-align:left;border-radius:6px}
+.wf-row:hover,.wf-row[aria-expanded="true"]{background:var(--sunk)}
+#f-out,#t-out,#s-out,#a-out,#n-out,#s2-out,#sc-out,#cu-out,#ca-out,#cd-out,#cp-out,#ca-verify{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-content:start}
+#f-node,#t-node{min-width:0}
+.body{grid-auto-rows:max-content}
+.kpi.txt b{font:600 14px/1.3 var(--f-mono);overflow-wrap:anywhere}
+.kpis.kfit{grid-template-columns:repeat(auto-fit,minmax(125px,1fr))}
+.wf-name{display:flex;gap:6px;align-items:center;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wf-name b{font-family:var(--f-mono);font-weight:500}
+.wf-track{position:relative;height:16px;background:var(--sunk);border-radius:4px;overflow:hidden}
+.wf-bar{position:absolute;top:2px;bottom:2px;border-radius:3px;background:var(--teal);min-width:3px}
+.wf-bar.error{background:var(--red)} .wf-bar.slow,.wf-bar.origin-ok{background:var(--amber)}
+.wf-lab{position:absolute;right:3px;top:1px;font:500 10.5px/14px var(--f-mono);color:var(--muted);background:var(--sunk);padding:0 4px;border-radius:3px}
+.role{font:600 10px/1 var(--f-mono);padding:3px 5px;border-radius:4px;text-transform:uppercase;white-space:nowrap}
+.role.origin{background:var(--red);color:#fff} .role.fp{background:var(--amber-soft);color:var(--amber)} .role.affected{background:var(--red-soft);color:var(--red)}
+.inf{font:600 10px/1 var(--f-mono);color:var(--muted);border:1px dashed var(--line);padding:2px 4px;border-radius:4px}
+.ev{font-size:12px;color:var(--muted);padding:4px 0 6px 18px;display:grid;gap:2px}
+@media (max-width:640px){.trk{grid-template-columns:1fr}.wf-row{grid-template-columns:1fr}}
+/* flow diagram */
+.flow-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--sunk);padding:10px;display:flex;justify-content:center}
+.flow{display:block}
+.flow .edge{fill:none;stroke:var(--muted);stroke-width:1.6;opacity:.75} .flow .edge.bad{stroke:var(--red);stroke-width:2.4;opacity:1}
+.flow .arr.ok{fill:var(--muted)} .flow .arr.bad{fill:var(--red)}
+.flow .elab{font:600 12px var(--f-mono);fill:var(--muted)} .flow .elab.bad{fill:var(--red)}
+.flow .nd{cursor:pointer;outline:none}
+.flow .nd rect.box{fill:var(--surface);stroke:var(--good);stroke-width:1.6}
+.flow .nd.error rect.box{stroke:var(--red);fill:color-mix(in srgb,var(--red-soft) 55%,var(--surface))}
+.flow .nd.slow rect.box,.flow .nd.degraded rect.box{stroke:var(--amber);fill:color-mix(in srgb,var(--amber-soft) 60%,var(--surface))}
+.flow .nd.down rect.box{stroke:var(--red);fill:color-mix(in srgb,var(--red-soft) 55%,var(--surface))}
+.flow .nd.origin rect.box{stroke:var(--red);stroke-width:3.2}
+.flow .nd:hover rect.box,.flow .nd:focus-visible rect.box{stroke-width:3}
+.flow .nd.sel rect.box{stroke:var(--teal);stroke-width:3.4}
+.flow .nm{font:600 14px var(--f-mono);fill:var(--ink)} .flow .st2{font:500 12.5px var(--f-body);fill:var(--muted)}
+.flow .rl{font:700 11.5px var(--f-mono);fill:var(--red);letter-spacing:.04em} .flow .rl.fp{fill:var(--amber)}
+.flow .tg{font:700 11px var(--f-mono);letter-spacing:.05em} .flow .tg.UPSTREAM{fill:#5b4bd1} .flow .tg.DOWNSTREAM{fill:var(--red)} .flow .tg.REPORTED{fill:var(--teal-ink)}
+.flow .tgbox{fill:var(--surface);stroke:var(--line)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);align-items:center}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;border:2px solid var(--good);margin-right:4px;vertical-align:-2px}
+.legend i.e{border-color:var(--red);background:var(--red-soft)} .legend i.s{border-color:var(--amber);background:var(--amber-soft)} .legend i.o{border:3px solid var(--red)}
+.sys{border:1px solid var(--teal);border-radius:12px;padding:12px;display:grid;gap:10px;background:var(--surface)}
+.sys-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap} .sys-head b{font:600 15px var(--f-mono)}
+.tagpill{font:700 10px/1 var(--f-mono);padding:4px 6px;border-radius:4px;letter-spacing:.05em}
+.tagpill.UPSTREAM{background:#e7e4fb;color:#4a3bb8} .tagpill.DOWNSTREAM{background:var(--red-soft);color:var(--red)} .tagpill.REPORTED{background:var(--tint);color:var(--teal-ink)}
+.logs{font:12px/1.5 var(--f-mono);background:var(--sunk);border:1px solid var(--line);border-radius:8px;max-height:320px;overflow:auto}
+.logs div{display:grid;grid-template-columns:96px 52px minmax(0,1fr);gap:8px;padding:2px 8px;border-bottom:1px solid var(--line)}
+.logs div.this{background:color-mix(in srgb,var(--tint) 80%,transparent);font-weight:600}
+.logs .lv{font-weight:700} .logs .lv.ERROR{color:var(--red)} .logs .lv.WARN{color:var(--amber)} .logs .lv.INFO{color:var(--muted)}
+.logs .msg{overflow-wrap:anywhere}
+@media (max-width:640px){.logs div{grid-template-columns:72px 44px minmax(0,1fr)}}
+@media (max-width:1560px){.stat.model{display:none}}
+@media (max-width:640px){.aform{grid-template-columns:repeat(2,minmax(0,1fr))}}
+#r-inv{display:grid;gap:12px;align-content:start}
+#panel-rinv,#panel-rcov,#panel-rrep{grid-auto-rows:max-content}
+#r-recent{padding-bottom:4px}
+@media (max-width:640px){.kpis.k4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+@media (max-width:900px){
+  .rail{gap:6px} .agents button{flex:none;grid-template-columns:24px auto;gap:6px;padding:5px 10px 5px 5px}
+  .agents .ico{width:24px;height:24px;border-radius:6px} .agents .ico svg{width:14px;height:14px}
+  .panes{grid-template-columns:1fr;padding-top:0}
+  .mobile-tabs{display:flex;gap:6px;padding:10px max(14px,env(safe-area-inset-right,0px)) 10px max(14px,env(safe-area-inset-left,0px))}
+  .mobile-tabs button{flex:1;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px;font-weight:600;font-size:13px}
+  .mobile-tabs button[aria-selected="true"]{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+  body[data-view="chat"] #inspector,body[data-view="inspect"] #chatpane{display:none}
+  .msg,.approval{max-width:100%}
+  .stat.model{display:none}
+  .stat{white-space:normal;flex-wrap:wrap;min-width:0;max-width:100%}
+  .pane-head > .small.muted{display:none}
+}
+</style>
+</head>
+<body data-view="chat">
+
+<header class="top">
+  <div class="brand">
+    <div class="logo" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 2 21 7v10l-9 5-9-5V7z"/><path d="M3 7l9 5 9-5M12 12v10"/></svg></div>
+    <div><b>AIOps</b><span class="org-pill">DDAT · AETNA</span><small>AI agents for IT operations · ITSM · observability · delivery</small></div>
+  </div>
+  <span class="stat" id="st-sn"><span class="led"></span>ServiceNow <b>checking…</b></span>
+  <span class="stat model" id="st-model"><span class="led ok"></span>Model <b>–</b></span>
+  <span class="stat" id="st-appr"><span class="led"></span>Approvals <b>–</b></span>
+  <span class="who" id="who"></span>
+  <button class="hbtn" type="button" id="backlog-btn" title="Work items created from AIOps">Backlog <b id="backlog-n">0</b></button>
+</header>
+
+<div class="shell">
+<nav class="agents rail" role="tablist" aria-label="Agents">
+  <span class="rail-title">Agents</span>
+  <button role="tab" data-agent="incident" aria-selected="true" title="Incident agent"><span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2.5 20h19z"/><path d="M12 10v4M12 17.2v.3"/></svg></span><span class="txt"><b>Incidents</b><small>Shift briefing, triage, routing</small></span></button>
+  <button role="tab" data-agent="rca" aria-selected="false" title="RCA agent"><span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5M8 10.5h5M10.5 8v5"/></svg></span><span class="txt"><b>Root cause</b><small>Evidence, hypotheses, RCA report</small></span></button>
+  <button role="tab" data-agent="anomaly" aria-selected="false" title="Anomaly agent"><span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></svg></span><span class="txt"><b>Anomalies</b><small>Model + APM + logs, alert noise</small></span></button>
+  <button role="tab" data-agent="txn" aria-selected="false" title="Transaction agent"><span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="6" r="2.2"/><circle cx="19" cy="6" r="2.2"/><circle cx="12" cy="18" r="2.2"/><path d="M7.2 6h9.6M6.2 7.9l4.6 8.2M17.8 7.9l-4.6 8.2"/></svg></span><span class="txt"><b>Transactions</b><small>Track by ID, upstream/downstream</small></span></button>
+  <button role="tab" data-agent="slo" aria-selected="false" title="Reliability agent"><span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17a8 8 0 1 1 16 0"/><path d="m12 17 4-5"/><path d="M4 21h16"/></svg></span><span class="txt"><b>Reliability</b><small>SLOs, error budgets, burn</small></span></button>
+  <button role="tab" data-agent="change" aria-selected="false" title="Change guard"><span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 7.7 8 9 4.6-1.3 8-4.5 8-9V6z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg></span><span class="txt"><b>Change guard</b><small>Risk before deploy, DORA</small></span></button>
+  <div class="rail-foot"><b>Sources</b>ServiceNow · Dynatrace · AppDynamics · Splunk · Jaeger/Tempo · anomaly model</div>
+</nav>
+<div class="main">
+<nav class="mobile-tabs" aria-label="View">
+  <button id="mv-chat" aria-selected="true">Chat</button>
+  <button id="mv-inspect" aria-selected="false">Shift &amp; incidents</button>
+</nav>
+
+<div class="panes">
+  <!-- chat -->
+  <section class="pane" id="chatpane" aria-label="Chat">
+    <div class="pane-head">
+      <h2 id="chat-title">Incident agent</h2>
+      <span class="small muted mono" id="thread"></span>
+      <button class="btn ghost" id="newchat">New chat</button>
+    </div>
+    <div class="msgs" id="msgs-incident" data-agent-pane="incident">
+      <div class="empty">
+        <h3>Ask about your incidents</h3>
+        <p class="muted">The incident agent reads ServiceNow with tools. Creates, updates, notes and resolves wait for your Approve.</p>
+      </div>
+    </div>
+    <div class="msgs" id="msgs-rca" data-agent-pane="rca" hidden>
+      <div class="empty">
+        <h3>Investigate a root cause</h3>
+        <p class="muted">The RCA agent collects evidence (ServiceNow today; Git, releases and MELT as they connect), ranks causes and writes the RCA in the AIOps RCA template. Tell it what you saw in dashboards and logs.</p>
+      </div>
+    </div>
+    <div class="msgs" id="msgs-anomaly" data-agent-pane="anomaly" hidden>
+      <div class="empty">
+        <h3>Spot what is unusual</h3>
+        <p class="muted">The anomaly agent scores signals from Dynatrace, AppDynamics and Splunk with your predictive model, then uses ServiceNow to decide: raise an event, add evidence to an open incident, or hold off during a change window.</p>
+      </div>
+    </div>
+    <div class="msgs" id="msgs-txn" data-agent-pane="txn" hidden>
+      <div class="empty">
+        <h3>Follow a transaction</h3>
+        <p class="muted">Give the transaction agent a transaction or correlation id: it pulls the spans and logs from Splunk, AppDynamics, Dynatrace, Jaeger and Tempo, rebuilds the call chain, finds where it failed and whether the cause is upstream or downstream of where it was reported.</p>
+      </div>
+    </div>
+    <div class="msgs" id="msgs-slo" data-agent-pane="slo" hidden>
+      <div class="empty">
+        <h3>Run reliability by SLOs</h3>
+        <p class="muted">The reliability agent tracks every SLO's error budget and burn rate, pages on fast burn, says which incidents and changes spent the budget, and sets the release policy: normal, caution, restrict or freeze.</p>
+      </div>
+    </div>
+    <div class="msgs" id="msgs-change" data-agent-pane="change" hidden>
+      <div class="empty">
+        <h3>Guard changes before they ship</h3>
+        <p class="muted">The change guard scores each upcoming change on blast radius, error budget, change failure rate, current health, collisions and freeze windows, recommends GO, CANARY or HOLD with guardrails, and verifies changes after deploy.</p>
+      </div>
+    </div>
+    <div class="composer">
+      <div class="chips" id="chips"></div>
+      <form class="input" id="form">
+        <textarea id="input" rows="1" placeholder="e.g. Show open P1 and P2 incidents" aria-label="Message"></textarea>
+        <button class="btn primary" id="send" type="submit">Send</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- inspector -->
+  <section class="pane" id="inspector" aria-label="Inspector">
+    <div class="pane-head">
+      <div class="tabs" role="tablist" id="tabs-incident">
+        <button class="tab" role="tab" id="tab-shift" aria-selected="true">Shift</button>
+        <button class="tab" role="tab" id="tab-inc" aria-selected="false">Incidents</button>
+        <button class="tab" role="tab" id="tab-tools" aria-selected="false">Tool tester</button>
+      </div>
+      <div class="tabs" role="tablist" id="tabs-rca" hidden>
+        <button class="tab" role="tab" id="tab-rinv" aria-selected="false">Investigation</button>
+        <button class="tab" role="tab" id="tab-rcov" aria-selected="false">Evidence<span class="count" id="cov-count"></span></button>
+        <button class="tab" role="tab" id="tab-rrep" aria-selected="false">Report</button>
+      </div>
+      <div class="tabs" role="tablist" id="tabs-anomaly" hidden>
+        <button class="tab" role="tab" id="tab-asig" aria-selected="false">Signals<span class="count" id="sig-count"></span></button>
+        <button class="tab" role="tab" id="tab-aanom" aria-selected="false" title="ServiceNow incident volume (backstop)">Volume<span class="count" id="anom-count"></span></button>
+        <button class="tab" role="tab" id="tab-anoise" aria-selected="false">Alert noise</button>
+        <button class="tab" role="tab" id="tab-asrc" aria-selected="false">Sources</button>
+      </div>
+      <div class="tabs" role="tablist" id="tabs-slo" hidden>
+        <button class="tab" role="tab" id="tab-sslo" aria-selected="false">SLOs<span class="count" id="slo-count"></span></button>
+        <button class="tab" role="tab" id="tab-sscore" aria-selected="false">Scorecard</button>
+        <button class="tab" role="tab" id="tab-ssrc" aria-selected="false">Sources</button>
+      </div>
+      <div class="tabs" role="tablist" id="tabs-change" hidden>
+        <button class="tab" role="tab" id="tab-cup" aria-selected="false">Upcoming<span class="count" id="chg-count"></span></button>
+        <button class="tab" role="tab" id="tab-cas" aria-selected="false">Assess</button>
+        <button class="tab" role="tab" id="tab-cdora" aria-selected="false">DORA</button>
+        <button class="tab" role="tab" id="tab-cpol" aria-selected="false">Policy</button>
+      </div>
+      <div class="tabs" role="tablist" id="tabs-txn" hidden>
+        <button class="tab" role="tab" id="tab-tfind" aria-selected="false">Track ID</button>
+        <button class="tab" role="tab" id="tab-tpath" aria-selected="false" title="Static CMDB dependency map of a business service">Service map</button>
+        <button class="tab" role="tab" id="tab-tsrc" aria-selected="false">Sources</button>
+      </div>
+      <span class="small muted" id="ws-note">No LLM needed</span>
+    </div>
+
+    <div class="body" id="panel-shift"><p class="note">Loading your shift briefing…</p></div>
+
+    <div class="body" id="panel-inc" hidden>
+      <form class="filters" id="search">
+        <input id="q-text" placeholder="Search text, or an INC number" aria-label="Search">
+        <select id="q-prio" aria-label="Priority">
+          <option value="">Any priority</option><option value="1">P1</option><option value="<=2">P1–P2</option>
+          <option value="<=3">P1–P3</option><option value="4">P4</option>
+        </select>
+        <label class="check"><input type="checkbox" id="q-active" checked> Active</label>
+      </form>
+      <div class="list" id="list"></div>
+      <div id="detail"></div>
+    </div>
+
+    <div class="body" id="panel-tools" hidden>
+      <label class="form"><span class="muted small">Tool</span>
+        <select id="tool-select" aria-label="Tool"></select>
+      </label>
+      <p class="note" id="tool-desc"></p>
+      <form class="form" id="tool-form"></form>
+      <div class="row"><button class="btn primary" id="tool-run" type="button">Run tool</button>
+        <span class="note">Write tools return an approval card here; nothing is written until you approve.</span></div>
+      <div id="tool-out"></div>
+    </div>
+
+    <!-- RCA agent workspace -->
+    <div class="body" id="panel-rinv" data-agent-pane="rca" hidden>
+      <form class="rpick" id="rpick">
+        <input id="r-num" placeholder="INC number to investigate" aria-label="Incident number" autocomplete="off">
+        <button class="btn primary" type="submit" id="r-go">Investigate</button>
+      </form>
+      <div class="chips" id="r-recent"><span class="note">Loading recent P1/P2…</span></div>
+      <div id="r-inv"><p class="note">Pick a P1/P2 above, type an incident number, or ask the RCA agent in chat.</p></div>
+    </div>
+
+    <div class="body" id="panel-rcov" data-agent-pane="rca" hidden>
+      <div class="sec"><h4>Evidence coverage</h4><div class="stack" id="r-cov"><p class="note">Loading…</p></div>
+        <p class="note">Git and releases connect with RCA_GITHUB_TOKEN + rca_config.json. Metrics, events, logs and traces (MELT) are planned; until then add what you saw as an observation.</p></div>
+      <div class="sec"><h4>Add an observation</h4>
+        <form class="form" id="r-obs">
+          <textarea id="r-obs-text" rows="3" placeholder="What did a dashboard, log search or trace show? e.g. enrollment-api 5xx rose from 0.3% to 7% at 02:08 UTC"></textarea>
+          <input id="r-obs-time" placeholder="UTC time it refers to (YYYY-MM-DD HH:MM), optional">
+          <div class="row"><button class="btn primary" type="submit">Add as evidence</button><span class="note" id="r-obs-msg">Cited as OBS-n. Re-ranks the causes.</span></div>
+        </form></div>
+      <div class="sec" id="r-evidence"></div>
+    </div>
+
+    <div class="body" id="panel-rrep" data-agent-pane="rca" hidden>
+      <div class="row">
+        <button class="btn primary" id="r-draft" type="button" disabled>Draft report</button>
+        <button class="btn" id="r-copy" type="button" disabled>Copy Markdown</button>
+        <button class="btn" id="r-publish" type="button" disabled>Publish to ServiceNow…</button>
+      </div>
+      <div id="r-report"><p class="note">Investigate an incident first. The report follows the AIOps RCA template: summary, impact, metrics, timeline, root cause, hypotheses, contributing factors, 5 whys, evidence, coverage, CAPA, lessons, open questions, sign-off.</p></div>
+    </div>
+
+    <!-- anomaly agent workspace -->
+    <div class="body" id="panel-asig" hidden>
+      <form class="tform" id="s-form"><select id="s-win" aria-label="Window"><option value="15">Last 15 minutes</option><option value="30">Last 30 minutes</option><option value="60" selected>Last 60 minutes</option><option value="240">Last 4 hours</option></select>
+        <button class="btn primary" type="submit" id="s-go">Detect</button></form>
+      <div id="s-out"><p class="note">Collecting signals…</p></div>
+    </div>
+    <div class="body" id="panel-aanom" hidden>
+      <p class="note">ServiceNow backstop: unusual incident volume catches user-reported impact that monitors miss. Primary detection is on the Signals tab.</p>
+      <form class="aform" id="a-form">
+        <label>Window<select id="a-win"><option value="6">6 hours</option><option value="12">12 hours</option><option value="24" selected>24 hours</option><option value="72">3 days</option><option value="168">7 days</option></select></label>
+        <label>Baseline<select id="a-base"><option value="7">7 days</option><option value="14" selected>14 days</option><option value="30">30 days</option><option value="90">90 days</option></select></label>
+        <label>By<select id="a-dim"><option value="cmdb_ci">Configuration item</option><option value="assignment_group">Assignment group</option><option value="category">Category</option></select></label>
+        <button class="btn primary" type="submit" id="a-go">Scan</button>
+      </form>
+      <div id="a-out"><p class="note">Scanning…</p></div>
+    </div>
+    <div class="body" id="panel-anoise" hidden>
+      <form class="tform" id="n-form"><select id="n-hours" aria-label="Hours"><option value="6">Last 6 hours</option><option value="24" selected>Last 24 hours</option><option value="72">Last 3 days</option></select>
+        <button class="btn primary" type="submit">Analyse alerts</button></form>
+      <div id="n-out"><p class="note">Loading Event Management alerts…</p></div>
+    </div>
+    <div class="body" id="panel-asrc" hidden><div class="sec"><h4>Data sources</h4><div class="stack" id="a-src"><p class="note">Loading…</p></div></div>
+      <div class="sec"><h4>Detection quality</h4><div id="a-eval"><p class="note">Loading…</p></div></div>
+      <div class="sec"><h4>Model training labels</h4><p class="note">P1/P2 incidents with a CI from ServiceNow, as anomaly windows per service (label 0 when closed as not reproducible, duplicate or false positive).</p>
+        <div class="row"><a class="btn" href="/api/anomaly-agent/labels.csv?days=90" download>Download labels (90 days, CSV)</a></div></div>
+      <div class="sec"><h4>Model contract</h4><p class="note">The agent POSTs these features per service to AIOPS_MODEL_URL and expects a score (0–1), threshold, top features and an explanation back. Full contract: docs/ANOMALY_DETECTION.md.</p><div class="chipset" id="a-feats"></div></div>
+      <p class="note">Signals decision: model anomaly (or 2+ agreeing sources / 1 critical signal without a model) → <b>suppressed</b> if a change window is open on the CI, <b>attach</b> if an incident is open, otherwise <b>raise</b> an Event Management event. Incident volume: each value's count vs its own baseline windows (z ≥ 3, 3+ incidents).</p></div>
+
+    <!-- transaction agent workspace -->
+    <div class="body" id="panel-tpath" hidden>
+      <p class="note"><b>Service map</b> = the static dependency map of a business service from the CMDB (what it depends on), coloured by open incidents and recent changes. It is not one transaction; for a specific transaction use <b>Track ID</b>. Click a system for its recent logs and incidents.</p>
+      <div class="sec"><h4>Impacted right now</h4><div class="stack" id="t-impacted"><p class="note">Checking open P1/P2 incidents…</p></div></div>
+      <form class="tform" id="t-form"><select id="t-name" aria-label="Transaction"><option value="">Loading business services…</option></select>
+        <button class="btn primary" type="submit" id="t-go">Trace</button></form>
+      <div id="t-out"></div>
+    </div>
+    <div class="body" id="panel-tfind" hidden>
+      <form class="trk" id="f-form"><input id="f-id" placeholder="Transaction / correlation / trace id" aria-label="Transaction id" autocomplete="off">
+        <input id="f-rep" placeholder="Reported at (service), optional" aria-label="Reported at" list="f-svcs" autocomplete="off"><datalist id="f-svcs"></datalist>
+        <button class="btn primary" type="submit" id="f-go">Track</button></form>
+      <div class="chips" id="f-examples"></div>
+      <div id="f-out"><p class="note">Pulls the id's spans and logs from every connected source, rebuilds the call chain and finds the origin. "Reported at" is the system where the problem was seen; if empty, the CI of the ServiceNow incident that mentions the id, or the entry point.</p></div>
+    </div>
+    <div class="body" id="panel-tsrc" hidden><div class="sec"><h4>Data sources</h4><div class="stack" id="t-src"><p class="note">Loading…</p></div></div>
+      <p class="note">Track ID: the <b>failure point</b> is the deepest failing hop. The <b>origin</b> is its caller when it rejected a bad request (4xx/validation), the dependency it timed out on when that dependency answered slower than the caller's timeout, otherwise the failure point itself. <b>Downstream</b> = the origin is something the reported system calls; <b>upstream</b> = the origin calls it.</p>
+      <p class="note">Service path: a hop is <b>down</b> with an open P1/P2 or 2+ open incidents, <b>degraded</b> with an open incident or a change in the last 24h. The likely origin is the most broken hop whose own dependencies are less broken.</p></div>
+
+    <!-- reliability agent workspace -->
+    <div class="body" id="panel-sslo" hidden><div id="s2-out"><p class="note">Evaluating SLOs…</p></div></div>
+    <div class="body" id="panel-sscore" hidden><div id="sc-out"><p class="note">Loading scorecard…</p></div></div>
+    <div class="body" id="panel-ssrc" hidden><div class="sec"><h4>SLI sources</h4><div class="stack" id="s2-src"><p class="note">Loading…</p></div></div>
+      <p class="note"><b>Error budget</b> = 1 − objective (99.9% → 0.1% of events may fail in the window). <b>Burn rate</b> = how fast that budget is being spent (1× = exactly on budget). Alerts use multi-window burn rates: <b>page</b> when 1h and 5m ≥ 14.4× or 6h and 30m ≥ 6×; <b>ticket</b> when 24h and 2h ≥ 3× or 72h and 6h ≥ 1×. Policy: &gt;50% left normal, 25–50% caution, 0–25% restrict, ≤0 freeze (reliability fixes only). Incident cost = bad events during the incident ÷ the window's budget.</p></div>
+
+    <!-- change guard workspace -->
+    <div class="body" id="panel-cup" hidden><div id="cu-out"><p class="note">Assessing upcoming changes…</p></div></div>
+    <div class="body" id="panel-cas" hidden>
+      <form class="tform" id="ca-form"><input id="ca-num" placeholder="Change number, e.g. CHG0098905" aria-label="Change number" autocomplete="off"><button class="btn primary" type="submit" id="ca-go">Assess</button></form>
+      <div id="ca-out"><p class="note">Pick a change on the Upcoming tab or type a number.</p></div>
+    </div>
+    <div class="body" id="panel-cdora" hidden><div id="cd-out"><p class="note">Loading…</p></div></div>
+    <div class="body" id="panel-cpol" hidden><div id="cp-out"><p class="note">Loading…</p></div></div>
+  </section>
+</div>
+</div>
+</div>
+
+<dialog class="alm-dlg" id="alm-dlg" aria-labelledby="alm-title"><div class="alm-head"><h3 id="alm-title">Create work item</h3><button class="btn ghost" type="button" id="alm-close" aria-label="Close">Close</button></div><div class="alm-body" id="alm-body"></div></dialog>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const newThread = () => Math.random().toString(36).slice(2, 10);
+let busy = false;
+let selected = null;
+let rcaOpen = null;  // keep the RCA panel open when the incident view refreshes
+
+const PROMPTS = [
+  "Start my shift",
+  "Give me the handover for the last 12 hours",
+  "Who has solved incidents like the top P1 before?",
+  "Any duplicates of the newest P1? Who should it be assigned to?",
+  "Why did the top P1 happen? Run an RCA",
+  "Which SLAs are about to breach?",
+  "Are there recurring incidents that need a problem record?",
+  "How is each team doing this month?",
+];
+const RCA_PROMPTS = [
+  "Investigate the top P1",
+  "What evidence is missing?",
+  "What would rule out the top cause?",
+  "Draft the RCA report",
+  "Publish the RCA to ServiceNow",
+];
+const AGENTS = {
+  incident: { title: "Incident agent", chat: "/api/chat", approve: "/api/approve", thread: newThread(), prompts: PROMPTS,
+    placeholder: "e.g. Show open P1 and P2 incidents", inspect: "Shift & incidents", working: "Working with ServiceNow…", tab: "shift", note: "No LLM needed" },
+  rca: { title: "RCA agent", chat: "/api/rca-agent/chat", approve: "/api/rca-agent/approve", thread: newThread(), prompts: RCA_PROMPTS,
+    placeholder: "e.g. Why did INC0012345 happen?", inspect: "Investigation", working: "Collecting evidence…", tab: "rinv", note: "AIOps RCA template v1.0" },
+};
+AGENTS.anomaly = { title: "Anomaly agent", chat: "/api/anomaly-agent/chat", approve: "/api/anomaly-agent/approve", thread: newThread(),
+  prompts: ["What needs action right now?", "Explain the top anomaly", "Send an event for the anomaly that needs raising",
+            "How well have past detections matched incidents?", "Any unusual incident volume in ServiceNow?", "How noisy are our alerts?"],
+  placeholder: "e.g. What needs action right now?", inspect: "Signals", working: "Collecting signals…", tab: "asig", note: "Model · APM · logs" };
+AGENTS.txn = { title: "Transaction agent", chat: "/api/txn-agent/chat", approve: "/api/txn-agent/approve", thread: newThread(),
+  prompts: ["Track TXN-ENR-20261024-0207", "Why did TXN-ENR-20261024-0311 fail, upstream or downstream of enrollment-api?",
+            "Which transactions are impacted right now?", "Where is the most impacted business service breaking?"],
+  placeholder: "e.g. Track TXN-ENR-20261024-0207", inspect: "Track", working: "Following the transaction…", tab: "tfind", note: "Spans · logs · CMDB" };
+AGENTS.alm = { title: "ALM", chat: "", approve: "/api/approve", thread: newThread(), prompts: [], placeholder: "", inspect: "", working: "", tab: "shift", note: "" };
+AGENTS.slo = { title: "Reliability agent", chat: "/api/slo-agent/chat", approve: "/api/slo-agent/approve", thread: newThread(),
+  prompts: ["What is burning error budget right now?", "Which services are in freeze?", "Explain the enrollment-api SLO", "Show the reliability scorecard"],
+  placeholder: "e.g. What is burning error budget right now?", inspect: "SLOs", working: "Evaluating SLOs…", tab: "sslo", note: "SLOs · error budgets" };
+AGENTS.change = { title: "Change guard", chat: "/api/change-agent/chat", approve: "/api/change-agent/approve", thread: newThread(),
+  prompts: ["Which upcoming changes should we hold?", "Assess CHG0098905", "Can CHG0098901 go during the freeze?", "Did CHG0098871 cause a regression?", "Show DORA metrics"],
+  placeholder: "e.g. Assess CHG0098905", inspect: "Changes", working: "Assessing change risk…", tab: "cup", note: "Risk before deploy" };
+const LOADERS = { slo: () => { loadSlos(); loadSources("/api/slo-agent/coverage", "#s2-src"); }, change: () => loadUpcoming(), rca: () => loadRcaHome(), anomaly: () => { runDetect(); loadSources("/api/anomaly-agent/coverage", "#a-src"); loadAnomalyMeta(); }, txn: () => { loadSources("/api/txn-agent/coverage", "#t-src"); loadTrackHome(); } };
+const loaded = {};
+let agent = "incident";
+const A = () => AGENTS[agent];
+const msgsEl = (ag = agent) => $("#msgs-" + ag);
+let rCurrent = null, rMd = "", rcaLoaded = false;
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  let data = {};
+  try { data = await r.json(); } catch { /* empty body */ }
+  if (!r.ok) throw new Error(data.error || data.detail || `Request failed (${r.status})`);
+  return data;
+}
+
+/* ---------- markdown (small, safe) ---------- */
+function inline(s) {
+  return esc(s)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>")
+    .replace(/(^|\s)_([^_]+)_(?=\s|$)/g, "$1<em>$2</em>")
+    .replace(/\b(INC\d{7})\b/g, '<button class="inc-link" data-inc="$1" type="button">$1</button>');
+}
+function md(text) {
+  const lines = String(text || "").split("\n"); const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (/^\s*\|/.test(l)) {
+      const rows = []; while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(lines[i++]); i--;
+      const cells = (r) => r.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      const body = rows.filter((r, j) => j > 0 && !/^\s*\|?\s*:?-{2,}/.test(r));
+      out.push(`<table><thead><tr>${cells(rows[0]).map((c) => `<th>${inline(c)}</th>`).join("")}</tr></thead><tbody>${body.map((r) => `<tr>${cells(r).map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`);
+    } else if (/^#{1,4}\s/.test(l)) out.push(`<h4>${inline(l.replace(/^#+\s/, ""))}</h4>`);
+    else if (/^\s*[-*•]\s/.test(l)) {
+      const it = []; while (i < lines.length && /^\s*[-*•]\s/.test(lines[i])) it.push(`<li>${inline(lines[i++].replace(/^\s*[-*•]\s/, ""))}</li>`); i--;
+      out.push(`<ul>${it.join("")}</ul>`);
+    } else if (/^\s*\d+[.)]\s/.test(l)) {
+      const it = []; while (i < lines.length && /^\s*\d+[.)]\s/.test(lines[i])) it.push(`<li>${inline(lines[i++].replace(/^\s*\d+[.)]\s/, ""))}</li>`); i--;
+      out.push(`<ol>${it.join("")}</ol>`);
+    } else if (l.trim()) out.push(`<p>${inline(l)}</p>`);
+  }
+  return out.join("");
+}
+
+/* ---------- status ---------- */
+async function loadHealth() {
+  try {
+    const h = await api("/api/health"); window.HEALTH = h;
+    const src = { live: "LIVE", snapshot: "SNAPSHOT", mock: "MOCK DATA" }[h.mode] || h.mode;
+    if (h.user) { const nm = String(h.user).replace(/\s*\(.*\)$/, ""); const ini = nm.split(/[\s,]+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase(); $("#who").innerHTML = `${esc(nm)} <i>${esc(ini)}</i>`; }
+    $("#st-sn").innerHTML = `<span class="led ${h.servicenow_ok ? "ok" : "bad"}"></span><span class="srcbadge ${esc(h.mode)}">${esc(src)}</span> <b>${esc((h.instance || "").replace(/^https?:\/\//, ""))}</b>${h.servicenow_ok && h.user ? ` <span>as ${esc(h.user)}</span>` : ""}`;
+    $("#st-sn").title = h.servicenow_ok ? "" : h.servicenow_error || "";
+    $("#st-model").innerHTML = `<span class="led ok"></span>Model <b>${esc(h.model)}</b>`;
+    $("#st-appr").innerHTML = `<span class="led ${h.approvals ? "ok" : "warn"}"></span>Approvals <b>${h.approvals ? "on" : "off"}</b>`;
+    if (!h.servicenow_ok) showAlert($("#list"), `ServiceNow not reachable: ${h.servicenow_error}`);
+  } catch (e) {
+    $("#st-sn").innerHTML = `<span class="led bad"></span>Server <b>offline</b>`;
+  }
+}
+
+/* ---------- chat ---------- */
+function addMsg(role, html, ag = agent) {
+  const box = msgsEl(ag); box.querySelector(".empty")?.remove();
+  const d = document.createElement("div");
+  d.className = `msg ${role}`; d.innerHTML = html;
+  box.appendChild(d); box.scrollTop = box.scrollHeight;
+  return d;
+}
+function trailHtml(calls) {
+  if (!calls?.length) return "";
+  const WRITE = ["create_incident", "update_incident", "add_work_note", "resolve_incident", "link_duplicate", "create_problem", "record_rca", "publish_rca"];
+  return `<div class="trail">${calls.map((c) => `<details><summary class="${WRITE.includes(c.tool) ? "w" : ""}">↳ ${esc(c.tool)}</summary><pre>${esc(JSON.stringify(c.args, null, 1))}</pre></details>`).join("")}</div>`;
+}
+function showReply(res, ag = agent) {
+  if (res.reply) addMsg("bot", `${trailHtml(res.tool_calls)}<div class="bubble">${md(res.reply)}</div>`, ag);
+  (res.pending || []).forEach((p) => approvalCard(p, msgsEl(ag), true, ag));
+  if (ag === "rca") syncRcaFromTools(res.tool_calls || []);
+  if (["anomaly", "txn", "slo", "change"].includes(ag)) syncWorkspace(ag, res.tool_calls || []);
+}
+function approvalCard(p, container, viaChat, ag = agent) {
+  container.querySelector(".empty")?.remove();
+  const el = document.createElement("div");
+  el.className = "approval";
+  el.innerHTML = `<h4>Approve: ${esc(p.action)}</h4>
+    <div class="kv">${Object.entries(p.details).map(([k, v]) => `<span>${esc(k)}</span><b>${esc(typeof v === "string" ? v : JSON.stringify(v))}</b>`).join("")}</div>
+    <div class="row"><button class="btn go" data-a="1" type="button">Approve and write</button><button class="btn ghost" data-a="0" type="button">Reject</button>
+    <span class="note">Nothing is written until you approve.</span></div>`;
+  el.querySelectorAll("button[data-a]").forEach((b) => b.onclick = async () => {
+    const approved = b.dataset.a === "1";
+    el.querySelectorAll("button").forEach((x) => x.disabled = true);
+    try {
+      const res = await api(AGENTS[ag].approve, { id: p.id, approved, thread_id: AGENTS[ag].thread, tell_agent: viaChat });
+      el.classList.add("done"); if (!approved) el.classList.add("no");
+      el.querySelector("h4").textContent = `${approved ? "Approved" : "Rejected"}: ${p.action}`;
+      el.querySelector(".row").innerHTML = `<span class="note">${resultLine(res.result)}</span>`;
+      if (viaChat) showReply(res, ag);
+      if (approved && ag === "incident") { searchIncidents(); refreshSelected(); loadBriefing(); }
+      if (approved && ag === "rca" && rCurrent && viaChat) refreshRca(rCurrent);
+      if (ag === "alm") { refreshBacklog(); if (approved) { try { const o = JSON.parse(res.result); if (o.key) $("#alm-result").insertAdjacentHTML("beforeend", `<div class="created">Created ${esc(o.type)} ${o.url ? `<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.key)}</a>` : esc(o.key)} in ${esc(o.system)}${o.writeback ? ` · work note added to ${esc(o.writeback)}` : ""}</div>`); } catch { /* not json */ } } }  // a Report-tab publish keeps its confirmation in place
+    } catch (e) {
+      el.querySelector(".row").insertAdjacentHTML("beforeend", `<span class="alert">${esc(e.message)}</span>`);
+    }
+  });
+  container.appendChild(el);
+  if (container.classList.contains("msgs")) container.scrollTop = container.scrollHeight;
+}
+function resultLine(r) {
+  try {
+    const o = JSON.parse(r);
+    if (o.event_sent === true) return `Event sent to ServiceNow Event Management <span class="muted">· message key ${esc(o.message_key || "")}</span>`;
+    if (o.event_sent === false) return `<span class="alert">Event not sent: ${esc(o.error || "")}. ${esc(o.hint || "")}</span>`;
+    if (o.work_note && (o.attachment || o.attachment_error)) return `Work note added${o.attachment ? `, report attached as <b>${esc(o.attachment.file_name)}</b>` : ` (attachment failed: ${esc(o.attachment_error)})`}${o.problem_updated ? `, ${esc(o.problem_updated)} cause notes updated` : ""}.`;
+    const verb = o.created ? "Created" : o.updated ? "Updated" : o.resolved ? "Resolved" : o.added ? `Added ${o.added} to` : "Done:";
+    const num = o.created || o.updated || o.resolved || o.incident || o.number || "";
+    const extra = [o.priority, o.state, o.assignment_group].filter(Boolean).join(" · ");
+    return `${verb} ${inline(num)}${extra ? ` <span class="muted">· ${esc(extra)}</span>` : ""}`;
+  } catch { return esc(r); }
+}
+async function send(text) {
+  text = text.trim(); if (!text || busy) return;
+  const ag = agent, cfg = A();
+  busy = true; $("#send").disabled = true;
+  addMsg("user", `<div class="bubble">${esc(text)}</div>`, ag);
+  $("#input").value = ""; autosize();
+  const t = addMsg("bot", `<div class="typing"><i></i><i></i><i></i> ${esc(cfg.working)}</div>`, ag);
+  // the RCA agent works on the incident open in its workspace unless the message names another
+  const msg = ag === "txn" && tCurrent && !/trace|transaction/i.test(text) ? `${text}\n\n[Context: the ${tCurrent} transaction is open in the workspace.]` :
+    ag === "rca" && rCurrent && !/INC\d{7}/i.test(text) ? `${text}\n\n[Context: ${rCurrent} is open in the RCA workspace; use it unless I asked for a different incident.]` : text;
+  try {
+    const res = await api(cfg.chat, { message: msg, thread_id: cfg.thread });
+    t.remove(); showReply(res, ag);
+  } catch (e) {
+    t.innerHTML = `<div class="alert">${esc(e.message)}</div>`;
+  } finally { busy = false; $("#send").disabled = false; $("#input").focus(); }
+}
+function autosize() { const a = $("#input"); a.style.height = "auto"; a.style.height = Math.min(a.scrollHeight, 160) + "px"; }
+
+/* ---------- incidents ---------- */
+const prioClass = (p) => `prio p${String(p || "").trim()[0] || ""}`;
+const prioLabel = (p) => (p ? `P${String(p).trim()[0]}` : "–");
+function showAlert(el, msg) { el.innerHTML = `<div class="alert">${esc(msg)}</div>`; }
+
+async function searchIncidents() {
+  const text = $("#q-text").value.trim();
+  if (/^INC\d{7}$/i.test(text)) return openIncident(text.toUpperCase());
+  const q = new URLSearchParams({ text, priority: $("#q-prio").value, active_only: $("#q-active").checked, limit: 20 });
+  const list = $("#list");
+  list.innerHTML = `<p class="note">Loading…</p>`;
+  try {
+    const rows = await api(`/api/incidents?${q}`);
+    if (!rows.length) { list.innerHTML = `<p class="note">No incidents match.</p>`; return; }
+    list.innerHTML = rows.map((r) => `
+      <button class="item ${r.number === selected ? "on" : ""}" data-inc="${esc(r.number)}" type="button">
+        <span class="num">${esc(r.number)}</span><span class="sd">${esc(r.short_description)}</span><span class="${prioClass(r.priority)}">${prioLabel(r.priority)}</span>
+        <span class="meta">${esc(r.state)} · ${esc(r.assignment_group || "unassigned")} · ${esc(r.opened_at || "")}</span>
+      </button>`).join("");
+  } catch (e) { showAlert(list, e.message); }
+}
+async function openIncident(num) {
+  selected = num;
+  document.querySelectorAll(".item").forEach((b) => b.classList.toggle("on", b.dataset.inc === num));
+  if (agent !== "incident") switchAgent("incident");
+  selectTab("inc"); setView("inspect");
+  const d = $("#detail");
+  d.innerHTML = `<div class="detail"><p class="note">Loading ${esc(num)}…</p></div>`;
+  try {
+    const x = await api(`/api/incidents/${encodeURIComponent(num)}`);
+    const i = x.incident;
+    const f = [["Caller", i.caller_id], ["Group", i.assignment_group], ["Assigned to", i.assigned_to], ["CI", i.cmdb_ci],
+               ["Category", i.category], ["Impact / urgency", `${i.impact || "–"} / ${i.urgency || "–"}`], ["Opened", i.opened_at],
+               ["Updated", i.sys_updated_on], ["Resolution", i.close_code ? `${i.close_code}: ${i.close_notes || ""}` : ""]].filter(([, v]) => v);
+    d.innerHTML = `<div class="detail">
+      <div class="detail-head"><span class="num mono">${esc(i.number)}</span><span class="${prioClass(i.priority)}">${esc(i.priority || "")}</span><span class="state">${esc(i.state)}</span>
+        <h3>${esc(i.short_description)}</h3></div>
+      <div class="row">
+        <button class="btn primary" type="button" data-ask="Summarize ${esc(i.number)}">Summarize with agent</button>
+        <button class="btn" type="button" data-ask="Triage ${esc(i.number)}: check recent changes on its CI and similar past incidents, then suggest next steps">Triage</button>
+        <button class="btn" type="button" data-rca="${esc(i.number)}">Quick RCA</button>
+        <button class="btn" type="button" data-goto-rca="${esc(i.number)}">Investigate with RCA agent →</button>
+        <button class="btn alm" type="button" data-alm='${esc(JSON.stringify({ kind: "incident", ref: i.number }))}'>Create story / defect…</button>
+        <button class="btn ghost" type="button" data-fill="Add a work note to ${esc(i.number)}: ">Add note…</button>
+      </div>
+      <div class="kv">${f.map(([k, v]) => `<span>${esc(k)}</span><b>${esc(v)}</b>`).join("")}</div>
+      ${i.description ? `<div class="desc">${esc(i.description)}</div>` : ""}
+      <div class="sec"><h4>Activity (${x.activity.length})</h4>${x.activity.length ? `<ul class="tl">${x.activity.map((a) => `<li class="${a.type === "comment" ? "comment" : ""}"><small>${esc(a.at)} · ${esc(a.by)} · ${esc(a.type)}</small>${esc(a.text)}</li>`).join("")}</ul>` : `<p class="note">No work notes or comments.</p>`}</div>
+      <div class="sec"><h4>Recent changes on CI</h4>${x.changes.length ? x.changes.map((c) => `<div class="card"><b class="mono">${esc(c.number)}</b>${esc(c.short_description)}<span class="note">${esc(c.state)} · ended ${esc(c.end_date)} · ${esc(c.assignment_group || "")}</span></div>`).join("") : `<p class="note">None in the 48 hours before it opened.</p>`}</div>
+      <div id="rca"></div>
+      <div id="insights"><p class="note">Checking history, duplicates and routing…</p></div>
+    </div>`;
+    loadInsights(num);
+    if (rcaOpen === num) loadRca(num);
+  } catch (e) { showAlert(d, e.message); }
+}
+const refreshSelected = () => selected && openIncident(selected);
+
+/* ---------- insights for one incident ---------- */
+async function loadInsights(num) {
+  const box = $("#insights"); if (!box) return;
+  try {
+    const x = await api(`/api/insights/${encodeURIComponent(num)}`);
+    if (selected !== num) return;
+    const e = x.experts, a = x.assignment, d = x.duplicates;
+    const people = e.experts.length ? e.experts.map((p) => `
+      <div class="person"><b>${esc(p.person)}</b><span class="pct">${p.solved_similar} similar</span>
+        <span class="note">${esc(p.group || "")}${p.median_hours_to_resolve != null ? ` · median ${p.median_hours_to_resolve}h to resolve` : ""}</span>
+        ${p.examples[0] && p.examples[0].fix ? `<span class="note">Last fix (${inline(p.examples[0].number)}): ${esc(p.examples[0].fix)}</span>` : ""}</div>`).join("")
+      : `<p class="note">No similar resolved incidents found.</p>`;
+    const r = a.recommendation;
+    const reco = r ? `<div class="ins ${a.already_correct ? "" : "reco"}"><div class="row" style="justify-content:space-between">
+        <b>${a.already_correct ? "Assignment looks right" : "Suggested assignment"}: ${esc(r.assignment_group)}${r.assigned_to ? " → " + esc(r.assigned_to) : ""}</b>
+        <span class="pct">${Math.round(r.confidence * 100)}%</span></div>
+        <span class="note">${esc(a.reasons.join(" · "))}</span>
+        ${!a.already_correct || (r.assigned_to && r.assigned_to !== a.current_assignee) ? `<div><button class="btn" type="button" data-assign='${esc(JSON.stringify({ number: num, assignment_group: r.assignment_group, assigned_to: r.assigned_to || "" }))}'>Apply…</button></div>` : ""}</div>`
+      : `<p class="note">${esc(a.reason || "No routing suggestion.")}</p>`;
+    const dups = d && d.candidates.length ? `<div class="ins"><b>${esc(d.advice)}</b>${d.candidates.map((c) => `
+        <div class="row" style="justify-content:space-between"><span>${inline(c.number)} ${esc(c.short_description)} <span class="note">(${esc(c.why.join("; "))})</span></span>
+        ${c.number !== d.suggested_parent && !c.already_child_of ? `<button class="btn" type="button" data-link='${esc(JSON.stringify({ child_number: c.number, parent_number: d.suggested_parent }))}'>Link under ${esc(d.suggested_parent)}…</button>` : ""}</div>`).join("")}</div>` : "";
+    box.innerHTML = `
+      <div class="sec"><h4>Who solved this before (${e.similar_resolved} similar resolved)</h4><div class="ins">${people}
+        ${e.most_similar.length ? `<span class="note">Closest matches: ${e.most_similar.slice(0, 3).map((m) => `${inline(m.number)} ${esc(m.short_description)} (${Math.round(m.match * 100)}%)`).join(" · ")}</span>` : ""}
+        ${e.common_resolutions.length ? `<span class="note">Usual resolution: ${esc(e.common_resolutions.map((c) => `${c.close_code} (${c.count})`).join(", "))}</span>` : ""}</div></div>
+      <div class="sec"><h4>Routing</h4>${reco}</div>
+      ${dups ? `<div class="sec"><h4>Possible duplicates</h4>${dups}</div>` : ""}`;
+  } catch (err) { box.innerHTML = `<div class="alert">${esc(err.message)}</div>`; }
+}
+async function loadRca(num) {
+  const box = $("#rca"); if (!box) return;
+  rcaOpen = num;
+  box.innerHTML = `<div class="sec"><h4>Root cause analysis</h4><p class="note">Checking changes, dependencies, notes and history…</p></div>`;
+  try {
+    const a = await api(`/api/rca/${encodeURIComponent(num)}`);
+    if (selected !== num) return;
+    const chips = (ids) => `<div class="chipset">${ids.filter(Boolean).map((e) => /^INC\d{7}$/.test(e) ? `<button class="evid" type="button" data-inc="${esc(e)}">${esc(e)}</button>` : `<span class="evid">${esc(e)}</span>`).join("")}</div>`;
+    const hyps = a.hypotheses.map((h, i) => `<div class="hyp ${i === 0 && a.sufficient_evidence ? "lead" : ""}">
+        <div class="hyp-head"><b>${esc(h.title)}</b><span class="pct">${Math.round(h.confidence * 100)}%</span></div>
+        <div class="conf"><i style="width:${Math.round(h.confidence * 100)}%"></i></div>
+        <ul>${h.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>${chips(h.evidence)}
+        <span class="note">Next: ${esc(h.action)}</span></div>`).join("") || '<p class="note">No hypotheses: not enough evidence.</p>';
+    const summary = `${a.verdict}. ` + (a.hypotheses[0] ? a.hypotheses[0].reasons.join("; ") + ". " : "") + "Next: " + a.next_actions.join(" | ");
+    box.innerHTML = `<div class="sec"><h4>Root cause analysis</h4>
+      <div class="ins ${a.sufficient_evidence ? "" : ""}">
+        <div class="rca-head"><span class="verdict">${esc(a.verdict)}</span>
+          <div class="row"><button class="btn primary" type="button" data-ask="Write the root cause analysis for ${esc(num)}">Write RCA with agent</button>
+          <button class="btn" type="button" data-goto-rca="${esc(num)}">Full RCA in RCA agent →</button>
+          <button class="btn" type="button" data-record='${esc(JSON.stringify({ number: num, rca_summary: summary }))}'>Post as work note…</button></div></div>
+        ${hyps}
+        <details><summary class="small"><b>Timeline (${a.timeline.length})</b></summary><ul class="tl2">${a.timeline.map((e) => `<li><span class="mono">${esc(e.time.slice(5, 16))}</span><span class="k k-${esc(e.kind)}">${esc(e.kind)}</span><span>${esc(e.text)}</span></li>`).join("")}</ul></details>
+        ${a.evidence_gaps.length ? `<span class="note"><b>Evidence gaps:</b> ${esc(a.evidence_gaps.join(" "))}</span>` : ""}
+      </div></div>`;
+  } catch (e) { box.innerHTML = `<div class="alert">${esc(e.message)}</div>`; }
+}
+async function runWrite(tool, args, container) {
+  try {
+    const res = await api(`/api/tools/${tool}`, { args });
+    (res.pending || []).forEach((p) => approvalCard(p, container, false));
+    if (!res.pending?.length) container.insertAdjacentHTML("beforeend", `<pre class="out">${esc(res.output)}</pre>`);
+  } catch (e) { container.insertAdjacentHTML("beforeend", `<div class="alert">${esc(e.message)}</div>`); }
+}
+
+/* ---------- shift briefing ---------- */
+function kpi(label, value, cls = "") { return `<div class="kpi ${cls}"><b>${value}</b><span>${esc(label)}</span></div>`; }
+function rowItem(r) {
+  return `<button class="item" type="button" data-inc="${esc(r.number)}"><span class="num">${esc(r.number)}</span><span class="sd">${esc(r.short_description)}</span><span class="${prioClass(r.priority)}">${prioLabel(r.priority)}</span>
+    <span class="meta">${esc(r.state || "")} · ${esc(r.assignment_group || "no group")} · ${esc(r.assigned_to || "unassigned")}${r.age_hours != null ? ` · ${fmtAge(r.age_hours)} old` : ""}</span></button>`;
+}
+function fmtAge(h) { return h < 1 ? `${Math.round(h * 60)}m` : h < 48 ? `${Math.round(h)}h` : `${Math.round(h / 24)}d`; }
+async function loadBriefing() {
+  const box = $("#panel-shift");
+  try {
+    const b = await api("/api/shift/briefing");
+    const p = b.open_by_priority || {};
+    box.innerHTML = `
+      <div class="shift-head"><div><span class="small muted">${esc(b.shift.timezone)} · started ${esc(b.shift.start_local)} · ends ${esc(b.shift.end_local)}</span>
+        <h3>${esc(b.shift.name)} shift briefing</h3></div>
+        <div class="row"><button class="btn primary" type="button" data-ask="Start my shift">Brief me in chat</button>
+        <button class="btn" type="button" id="btn-handover">Handover</button></div></div>
+      <div class="headline">${esc(b.headline)}</div>
+      <div class="kpis">${kpi("open incidents", b.open_total)}${kpi("P1 open", p.P1 || 0, p.P1 ? "hot" : "")}${kpi("P2 open", p.P2 || 0, p.P2 ? "warn" : "")}
+        ${kpi("SLA at risk", b.sla_at_risk.length, b.sla_at_risk.length ? "hot" : "")}${kpi("new this shift", b.new_since_shift_start.length)}${kpi("unassigned", b.unassigned.length, b.unassigned.length ? "warn" : "")}</div>
+      <div class="sec"><h4>Top ${b.top.length} by priority</h4><div class="list">${b.top.map(rowItem).join("") || '<p class="note">No open incidents.</p>'}</div></div>
+      <div class="sec"><h4>SLA at risk</h4><div class="list">${b.sla_at_risk.map((s) => `<button class="sla ${s.breached ? "br" : ""}" type="button" data-inc="${esc(s.number)}">
+        <span class="num mono">${esc(s.number)}</span><span class="small">${esc(s.sla || "")}</span><span class="pct">${s.breached ? "BREACHED" : s.percent_elapsed + "%"}</span>
+        <span class="bar"><i style="width:${Math.min(100, s.percent_elapsed)}%"></i></span></button>`).join("") || '<p class="note">Nothing at risk.</p>'}</div>
+        ${b.sla_at_risk[0] && b.sla_at_risk[0].source !== "task_sla" ? '<p class="note">Estimated from priority targets (no task_sla records returned).</p>' : ""}</div>
+      <div class="sec"><h4>New since the shift started</h4><div class="list">${b.new_since_shift_start.map(rowItem).join("") || '<p class="note">Nothing new yet.</p>'}</div></div>
+      <div class="sec"><h4>Aged over 3 days</h4><div class="list">${b.aged_over_3_days.map(rowItem).join("") || '<p class="note">None.</p>'}</div></div>
+      <div id="handover"></div>`;
+    $("#btn-handover").onclick = loadHandover;
+  } catch (e) { box.innerHTML = `<div class="alert">${esc(e.message)}</div>`; }
+}
+async function loadHandover() {
+  const box = $("#handover"); box.innerHTML = `<p class="note">Loading handover…</p>`;
+  try {
+    const h = await api("/api/shift/handover?hours=12");
+    box.innerHTML = `<div class="sec"><h4>Handover · last ${h.window_hours}h</h4><div class="headline">${esc(h.summary)}</div>
+      ${h.resolved.length ? `<p class="small"><b>Resolved:</b></p>${h.resolved.map((r) => `<div class="card">${inline(r.number)} ${esc(r.short_description)}<span class="note">${esc(r.resolved_by || "")}: ${esc(r.fix || "")}</span></div>`).join("")}` : ""}
+      ${h.carry_over.length ? `<p class="small"><b>Carry over:</b></p>${h.carry_over.map((r) => `<div class="card">${inline(r.number)} ${esc(r.short_description)} <span class="${prioClass(r.priority)}">${prioLabel(r.priority)}</span>${r.last_note ? `<span class="note">Last note: ${esc(r.last_note)}</span>` : ""}</div>`).join("")}` : ""}</div>`;
+  } catch (e) { box.innerHTML = `<div class="alert">${esc(e.message)}</div>`; }
+}
+
+/* ---------- tool tester ---------- */
+let TOOLS = [];
+function enumOf(p) { return p.enum || (p.anyOf || []).flatMap((a) => a.enum || []); }
+function typeOf(p) { return p.type || (p.anyOf || []).map((a) => a.type).find((t) => t && t !== "null") || "string"; }
+function renderToolForm() {
+  const t = TOOLS.find((x) => x.name === $("#tool-select").value); if (!t) return;
+  $("#tool-desc").innerHTML = `${t.write ? '<span class="tag">WRITE · NEEDS APPROVAL</span> ' : ""}${esc(t.description)}`;
+  $("#tool-form").innerHTML = Object.entries(t.args).map(([name, p]) => {
+    const id = `arg-${name}`; const en = enumOf(p); const ty = typeOf(p);
+    const def = p.default ?? "";
+    let field;
+    if (en.length) field = `<select id="${id}" data-arg="${name}"><option value="">${def === "" || def === null ? "(not set)" : `default: ${esc(def)}`}</option>${en.map((v) => `<option>${esc(v)}</option>`).join("")}</select>`;
+    else if (ty === "boolean") field = `<select id="${id}" data-arg="${name}" data-type="boolean"><option value="">default: ${esc(String(def || false))}</option><option value="true">true</option><option value="false">false</option></select>`;
+    else if (/note|description|notes/.test(name)) field = `<textarea id="${id}" data-arg="${name}" rows="3"></textarea>`;
+    else field = `<input id="${id}" data-arg="${name}" ${ty === "integer" ? 'type="number"' : ""} placeholder="${esc(def === "" || def === null ? "" : `default: ${def}`)}">`;
+    const req = p.default === undefined && !(p.anyOf || []).some((a) => a.type === "null");
+    return `<label for="${id}"><b>${esc(name)}${req ? " *" : ""}</b>${field}</label>`;
+  }).join("") || `<p class="note">No arguments.</p>`;
+  $("#tool-out").innerHTML = "";
+}
+async function loadTools() {
+  try {
+    TOOLS = await api("/api/tools");
+    $("#tool-select").innerHTML = TOOLS.map((t) => `<option value="${esc(t.name)}">${esc(t.name)}${t.write ? "  (write)" : ""}</option>`).join("");
+    renderToolForm();
+  } catch (e) { showAlert($("#tool-out"), e.message); }
+}
+async function runTool() {
+  const name = $("#tool-select").value; const args = {};
+  document.querySelectorAll("#tool-form [data-arg]").forEach((el) => {
+    let v = el.value.trim(); if (v === "") return;
+    if (el.dataset.type === "boolean") v = v === "true"; else if (el.type === "number") v = Number(v);
+    args[el.dataset.arg] = v;
+  });
+  const out = $("#tool-out");
+  out.innerHTML = `<p class="note">Running ${esc(name)}…</p>`;
+  $("#tool-run").disabled = true;
+  try {
+    const res = await api(`/api/tools/${name}`, { args });
+    let text = res.output;
+    try { text = JSON.stringify(JSON.parse(res.output), null, 2); } catch { /* plain text */ }
+    out.innerHTML = res.pending?.length ? "" : `<pre class="out">${esc(text)}</pre>`;
+    (res.pending || []).forEach((p) => approvalCard(p, out, false));
+  } catch (e) { showAlert(out, e.message); }
+  finally { $("#tool-run").disabled = false; }
+}
+
+/* ---------- view switching ---------- */
+const TABS = ["shift", "inc", "tools", "rinv", "rcov", "rrep", "asig", "aanom", "anoise", "asrc", "tpath", "tfind", "tsrc", "sslo", "sscore", "ssrc", "cup", "cas", "cdora", "cpol"];
+function selectTab(which) {
+  TABS.forEach((t) => { $("#tab-" + t).setAttribute("aria-selected", which === t); $("#panel-" + t).hidden = which !== t; });
+  AGENTS[agent].tab = which;
+}
+function switchAgent(name, opts = {}) {
+  agent = name; const cfg = A();
+  document.querySelectorAll(".agents button").forEach((b) => b.setAttribute("aria-selected", b.dataset.agent === name));
+  Object.keys(AGENTS).filter((k) => k !== "alm").forEach((k) => { $("#msgs-" + k).hidden = k !== name; $("#tabs-" + k).hidden = k !== name; });
+  $("#chat-title").innerHTML = `${esc(cfg.title)}`;
+  $("#thread").textContent = `thread ${cfg.thread}`;
+  $("#input").placeholder = cfg.placeholder;
+  $("#chips").innerHTML = cfg.prompts.map((p) => `<button class="chip" type="button">${esc(p)}</button>`).join("");
+  $("#mv-inspect").textContent = cfg.inspect;
+  $("#ws-note").textContent = cfg.note;
+  selectTab(opts.tab || cfg.tab);
+  document.title = `AIOps · ${cfg.title}`;
+  const sub = name === "rca" ? rCurrent : name === "txn" ? tCurrent : null;
+  if (!opts.keepHash) history.replaceState(null, "", "#" + name + (sub ? "/" + encodeURIComponent(sub) : ""));
+  if (LOADERS[name] && !loaded[name]) { loaded[name] = true; if (name === "rca") rcaLoaded = true; if (!opts.skipLoad) LOADERS[name](); }
+}
+
+/* ---------- shared: data sources ---------- */
+async function loadSources(url, sel) {
+  try {
+    const cov = await api(url);
+    $(sel).innerHTML = cov.map((c) => `<div class="dom"><b>${esc(c.label)}</b><span class="st ${esc(c.state)}">${esc(c.state.replace("_", " "))}</span><span class="note">${esc(c.detail || "")}</span></div>`).join("");
+  } catch (e) { showAlert($(sel), e.message); }
+}
+function syncWorkspace(ag, calls) {
+  for (const c of calls) {
+    const a = c.args || {};
+    if (c.tool === "detect_service_anomalies" || c.tool === "explain_service") { if (a.window_minutes && [...$("#s-win").options].some((o) => o.value === String(a.window_minutes))) $("#s-win").value = String(a.window_minutes); runDetect(false, a.service); selectTab("asig"); }
+    if (c.tool === "scan_anomalies") { if (a.window_hours) $("#a-win").value = String(a.window_hours); if (a.baseline_days) $("#a-base").value = String(a.baseline_days); if (a.dimension) $("#a-dim").value = a.dimension; runScan(); selectTab("aanom"); }
+    if (c.tool === "alert_noise") { if (a.hours) $("#n-hours").value = String(a.hours); loadNoise(); selectTab("anoise"); }
+    if (c.tool === "trace_transaction" && a.name) { tracePath(a.name); }
+    if (c.tool === "impacted_transactions") { loadTxnHome(); selectTab("tpath"); }
+    if (c.tool === "find_transaction_id" && a.txn_id) { $("#f-id").value = a.txn_id; trackTxn(); }
+    if (c.tool === "slo_status") { loadSlos(); selectTab("sslo"); }
+    if (c.tool === "explain_slo" && a.service) { loadSlos(a.service); selectTab("sslo"); }
+    if (c.tool === "reliability_scorecard") { loadScorecard(); selectTab("sscore"); }
+    if (c.tool === "upcoming_change_risk") { loadUpcoming(); selectTab("cup"); }
+    if ((c.tool === "assess_change" || c.tool === "post_change_assessment") && a.number) assessChange(a.number);
+    if (c.tool === "verify_change" && a.number) assessChange(a.number, true);
+    if (c.tool === "dora_metrics") { loadDora(); selectTab("cdora"); }
+    if (c.tool === "track_transaction" && a.txn_id) { $("#f-id").value = a.txn_id; $("#f-rep").value = a.reported_at || ""; trackTxn(); }
+  }
+}
+
+/* ---------- anomaly agent: signals (model + observability, ServiceNow context) ---------- */
+const DEC_LABEL = { raise: "raise", attach: "attach", suppressed: "suppressed", watch: "watch" };
+async function runDetect(refresh = false, focus = "") {
+  $("#s-out").innerHTML = `<p class="note">Collecting signals from every source and scoring…</p>`; $("#s-go").disabled = true;
+  try { renderDetect(await api(`/api/anomaly-agent/detect?window_minutes=${$("#s-win").value}${refresh ? "&refresh=true" : ""}`), focus); }
+  catch (e) { showAlert($("#s-out"), e.message); }
+  finally { $("#s-go").disabled = false; }
+}
+function sigValue(s) {
+  if (s.value === null || s.value === undefined) return "";
+  return `${s.value}${esc(s.unit)}${s.baseline !== null && s.baseline !== undefined ? ` <span class="muted">vs ${s.baseline}${esc(s.unit)}</span>` : ""}`;
+}
+function renderDetect(d, focus) {
+  const act = d.summary.raise + d.summary.attach;
+  $("#sig-count").textContent = act ? String(act) : "";
+  const m = d.model;
+  const banner = `<div class="mbanner"><span class="st ${esc(m.state)}">${esc(m.state.replace("_", " "))}</span><b>Predictive model</b>
+    <span class="muted">${m.version ? esc(m.version) + " · " : ""}${esc(m.detail || "")}</span></div>`;
+  const cards = d.services.map((r) => {
+    const c = r.context, mo = r.model;
+    const inc = c.open_incidents[0];
+    const acts = [];
+    if (r.decision === "raise") acts.push(`<button class="btn primary" type="button" data-aact='${esc(JSON.stringify({ kind: "event", service: r.service }))}'>Send event to ServiceNow…</button>`,
+      `<button class="btn ghost" type="button" data-aact='${esc(JSON.stringify({ kind: "incident", service: r.service }))}'>Create incident instead…</button>`);
+    if (r.decision === "attach" && inc) acts.push(`<button class="btn primary" type="button" data-aact='${esc(JSON.stringify({ kind: "attach", service: r.service, number: inc.number }))}'>Add evidence to ${esc(inc.number)}…</button>`);
+    if (r.decision === "suppressed") acts.push(`<button class="btn ghost" type="button" data-aact='${esc(JSON.stringify({ kind: "event", service: r.service }))}'>Send event anyway…</button>`);
+    if (inc) acts.push(`<button class="btn" type="button" data-goto-rca="${esc(inc.number)}">Investigate ${esc(inc.number)} with RCA →</button>`);
+    acts.push(`<button class="btn alm" type="button" data-alm='${esc(JSON.stringify({ kind: "anomaly", ref: r.service }))}'>Create story…</button>`);
+    acts.push(`<button class="btn ghost" type="button" data-ask="Explain the ${esc(r.service)} anomaly: signals, model features, ServiceNow context and what to do">Explain</button>`);
+    return `<div class="anom ${r.decision === "raise" ? "high" : esc(r.decision)}" data-svc="${esc(r.service)}">
+      <div class="anom-head"><b>${esc(r.service)}</b><span class="row"><span class="dec ${esc(r.decision)}">${DEC_LABEL[r.decision]}</span><span class="pct">${Math.round(r.confidence * 100)}%</span></span></div>
+      <div class="conf"><i style="width:${Math.round(r.confidence * 100)}%"></i></div>
+      <span class="ctx">${c.in_cmdb ? `CI <b>${esc(c.ci)}</b>${c.owner ? ` · owner <b>${esc(c.owner)}</b>` : ""}${c.business_services.length ? ` · affects <b>${esc(c.business_services.join(", "))}</b>` : ""}` : "Not found in the CMDB: add it to service_map in aiops_config.json"}</span>
+      <span class="small">${esc(r.headline)}</span>
+      ${mo ? `<span class="small"><b>Model ${mo.score}</b> (threshold ${mo.threshold}) · ${esc(mo.explanation || "")}</span>
+        <div class="chipset">${(mo.top_features || []).map((f) => `<span class="feat" title="value ${esc(f.value)}">${esc(f.name)} ${f.contribution != null ? Math.round(f.contribution * 100) + "%" : ""}</span>`).join("")}</div>`
+        : `<span class="note">No model score: ${esc(r.sources.length)} source(s) agree.</span>`}
+      <span class="note"><b>${esc(r.decision_reason)}</b></span>
+      <div class="tblwrap"><table class="tbl"><thead><tr><th>Source</th><th>Signal</th><th>Value</th><th>Time</th></tr></thead><tbody>
+        ${r.signals.map((s) => `<tr${s.anomalous ? "" : ' class="muted"'}><td>${esc(s.source)}</td><td>${s.link ? `<a href="${esc(s.link)}" target="_blank" rel="noopener">${esc(s.name)}</a>` : esc(s.name)}${s.detail ? `<div class="note">${esc(s.detail)}</div>` : ""}</td><td>${sigValue(s)}</td><td class="mono">${esc((s.time || "").slice(11, 16))}</td></tr>`).join("")}
+      </tbody></table></div>
+      ${c.open_incidents.length ? `<div class="chipset">${c.open_incidents.map((i) => `<button class="inc-link" type="button" data-inc="${esc(i.number)}" title="${esc(i.short_description)}">${esc(i.number)} P${esc(String(i.priority || "").slice(0, 1))}</button>`).join("")}</div>` : ""}
+      ${c.change_window ? `<div class="card"><b class="mono">${esc(c.change_window.number)}</b>${esc(c.change_window.short_description)}<span class="note">window open ${esc(c.change_window.start.slice(11, 16))}–${esc(c.change_window.end.slice(11, 16))} UTC · ${esc(c.change_window.state || "")}</span></div>` : ""}
+      ${c.changes.length ? `<span class="note">Recent changes: ${c.changes.map((x) => `<b class="mono">${esc(x.number)}</b> ${esc(x.short_description)} (${x.minutes_ago} min ago)`).join(" · ")}</span>` : ""}
+      <div class="row">${acts.join("")}</div>
+    </div>`; }).join("");
+  $("#s-out").innerHTML = `${banner}
+    ${d.mock ? '<div class="vbox weak"><span class="small">MOCK observability streams and MOCK model scorer (SERVICENOW_MODE=mock). Connect Dynatrace, AppDynamics, Splunk and your model in .env.</span></div>' : ""}
+    <div class="kpis k4">${kpi("raise", d.summary.raise, d.summary.raise ? "hot" : "")}${kpi("attach to incident", d.summary.attach, d.summary.attach ? "warn" : "")}${kpi("suppressed (change)", d.summary.suppressed)}${kpi("watch", d.summary.watch)}</div>
+    <span class="note">${d.signals} signals · ${esc(d.window_start.slice(11, 16))}–${esc(d.window_end.slice(11, 16))} UTC · sources: ${esc(d.coverage.filter((x) => x.name !== "servicenow").map((x) => `${x.label} ${x.state.replace("_", " ")}`).join(", "))}</span>
+    ${d.errors.length ? `<div class="alert">${esc(d.errors.join(" · "))}</div>` : ""}
+    ${cards || `<p class="note">No signals from connected sources in this window.${d.coverage.every((x) => x.name === "servicenow" || x.state === "not_connected") ? " No observability source or model is connected yet: see the Sources tab." : ""}</p>`}
+    <div class="row"><button class="btn ghost" type="button" id="s-refresh">Refresh now</button></div>`;
+  $("#s-refresh").onclick = () => runDetect(true);
+  if (focus) { const el = [...document.querySelectorAll("#s-out [data-svc]")].find((x) => x.dataset.svc.toLowerCase() === focus.toLowerCase()); if (el) el.scrollIntoView({ block: "start" }); }
+}
+async function anomalyAction(a, btn) {
+  btn.disabled = true;
+  const card = btn.closest(".anom");
+  try {
+    const r = await api(`/api/anomaly-agent/action/${a.kind}`, { service: a.service, window_minutes: Number($("#s-win").value), number: a.number || "" });
+    (r.pending || []).forEach((p) => approvalCard(p, card, false, "anomaly"));
+    if (!r.pending?.length) card.insertAdjacentHTML("beforeend", `<pre class="out">${esc(r.output)}</pre>`);
+  } catch (e) { card.insertAdjacentHTML("beforeend", `<div class="alert">${esc(e.message)}</div>`); btn.disabled = false; }
+}
+async function loadAnomalyMeta() {
+  try {
+    const c = await api("/api/anomaly-agent/model-contract");
+    $("#a-feats").innerHTML = c.features.map((f) => `<span class="feat" title="${esc(f.description)}">${esc(f.name)}</span>`).join("");
+  } catch (e) { showAlert($("#a-feats"), e.message); }
+  try {
+    const e = await api("/api/anomaly-agent/evaluate?days=30");
+    $("#a-eval").innerHTML = e.detections ? `<div class="kpis k4">${kpi("detections (30d)", e.detections)}${kpi("precision", e.precision ?? "–")}${kpi("recall (watched CIs)", e.recall_on_watched_cis ?? "–")}${kpi("median lead, min", e.median_lead_minutes ?? "–")}</div>
+      <p class="note">Detections logged in ${esc(e.log)} matched to P1/P2 incidents on the same CI within ±${e.horizon_hours}h. ${esc(e.lead_note)}${e.missed_incidents.length ? ` Missed: ${esc(e.missed_incidents.join(", "))}.` : ""}</p>`
+      : `<p class="note">No detections logged yet. Each Detect run logs anomalies so they can be scored against incidents later.</p>`;
+  } catch (err) { showAlert($("#a-eval"), err.message); }
+}
+
+/* ---------- anomaly agent workspace ---------- */
+function spark(series) {
+  const max = Math.max(...series, 1), w = 6;
+  return `<svg class="spark" viewBox="0 0 ${series.length * w} 30" preserveAspectRatio="none" aria-hidden="true">${series.map((v, i) => {
+    const h = Math.max(1.5, (v / max) * 28); return `<rect x="${i * w}" y="${30 - h}" width="${w - 2}" height="${h}" class="${i === series.length - 1 ? "cur" : ""}"><title>${v}</title></rect>`; }).join("")}</svg>`;
+}
+async function runScan() {
+  const q = new URLSearchParams({ window_hours: $("#a-win").value, baseline_days: $("#a-base").value, dimension: $("#a-dim").value });
+  $("#a-out").innerHTML = `<p class="note">Scanning incidents in ServiceNow…</p>`; $("#a-go").disabled = true;
+  try { renderScan(await api("/api/anomaly-agent/scan?" + q)); }
+  catch (e) { showAlert($("#a-out"), e.message); }
+  finally { $("#a-go").disabled = false; }
+}
+function renderScan(r) {
+  $("#anom-count").textContent = r.anomalies.length ? String(r.anomalies.length) : "";
+  const o = r.overall || { current: 0, expected: 0, z: 0 };
+  const wl = r.window_hours >= 24 && r.window_hours % 24 === 0 ? `${r.window_hours / 24}d` : `${r.window_hours}h`;
+  const cards = r.anomalies.map((a) => {
+    const top = a.incidents[0];
+    return `<div class="anom ${a.severity === "high" ? "high" : ""}">
+      <div class="anom-head"><b>${esc(a.key)}</b><span class="row"><span class="sev ${esc(a.severity)}">${esc(a.severity)}</span>${a.new ? '<span class="sev new">new</span>' : ""}<span class="pct">z ${esc(a.z)}</span></span></div>
+      <span class="small">${esc(a.reason)}</span>
+      <div>${spark(a.series)}<div class="spark-cap"><span>${esc(r.baseline_days)} days ago</span><span>each bar = ${wl}</span><span>now</span></div></div>
+      ${a.common_terms.length ? `<div class="chipset">${a.common_terms.map((t) => `<span class="cat">${esc(t)}</span>`).join("")}</div>` : ""}
+      <div class="list">${a.incidents.slice(0, 6).map((i) => rowItem({ ...i, age_hours: null })).join("")}</div>
+      ${a.changes.length ? `<div class="stack">${a.changes.map((c) => `<div class="card"><b class="mono">${esc(c.number)}</b>${esc(c.short_description)}<span class="note">${esc(c.cmdb_ci || "")} · ended ${esc(c.ended)} UTC</span></div>`).join("")}</div>` : '<span class="note">No changes ended in or just before the window on these CIs.</span>'}
+      ${a.related_spiking.length ? `<span class="note"><b>Connected CIs spiking too:</b> ${esc(a.related_spiking.join(", "))}</span>` : ""}
+      <div class="row">${top ? `<button class="btn primary" type="button" data-goto-rca="${esc(top.number)}">Investigate ${esc(top.number)} with RCA →</button>` : ""}
+        <button class="btn" type="button" data-ask="Explain the ${esc(a.key)} anomaly: is it linked to a change, and what should we do?">Explain</button>
+        <button class="btn ghost" type="button" data-ask="Raise a problem for the ${esc(a.key)} anomaly with incidents ${esc(a.incidents.map((i) => i.number).join(", "))}">Raise problem…</button></div>
+    </div>`; }).join("");
+  $("#a-out").innerHTML = `
+    ${r.anchored ? `<div class="vbox weak"><span class="small">${esc(r.anchored)}</span></div>` : ""}
+    <div class="kpis k4">${kpi("incidents scanned", r.incidents_scanned)}${kpi(`${r.dimension_label.toLowerCase()}s checked`, r.values_checked)}${kpi("anomalies", r.anomalies.length, r.anomalies.length ? "hot" : "")}${kpi(`all incidents · z ${o.z}`, `${o.current} / ${o.expected}`, o.z >= 3 ? "warn" : "")}</div>
+    <span class="note">Window ${esc(r.window_start)} → ${esc(r.window_end)} UTC, compared with ${esc(r.baseline_days)} days by ${esc(r.dimension_label.toLowerCase())}.</span>
+    ${cards || `<p class="note">Nothing unusual by ${esc(r.dimension_label.toLowerCase())}: no value reached ${r.thresholds.min_count}+ incidents at z ≥ ${r.thresholds.z_min}. Try another dimension or a longer window.</p>`}`;
+}
+async function loadNoise() {
+  $("#n-out").innerHTML = `<p class="note">Reading Event Management alerts…</p>`;
+  try {
+    const n = await api("/api/anomaly-agent/alerts?hours=" + $("#n-hours").value);
+    if (!n.available) { $("#n-out").innerHTML = `<div class="vbox weak"><b>Event Management not available</b><span class="small">${esc(n.reason)}</span></div><p class="note">Incident-volume anomalies still work. Connect Event Management (em_alert) or a monitoring tool to analyse alert noise.</p>`; return; }
+    const pat = (p) => `<span class="pat ${p === "steady noise" ? "steady" : esc(p)}">${esc(p)}</span>`;
+    $("#n-out").innerHTML = `
+      <div class="kpis">${kpi("alerts", n.alerts)}${kpi("groups after de-dup", n.groups)}${kpi("noise removed", n.dedup_reduction_pct + "%", "")}</div>
+      <div class="tblwrap"><table class="tbl"><thead><tr><th>Node</th><th>Metric</th><th>Alerts</th><th>Peak/h</th><th>Pattern</th><th>Last</th></tr></thead><tbody>
+      ${n.top_groups.map((g) => `<tr><td class="mono">${esc(g.node)}</td><td>${esc(g.metric)}<div class="note">${esc(g.sample)}</div></td><td>${g.count}</td><td>${g.peak_per_hour}</td><td>${pat(g.pattern)}</td><td class="mono">${esc(g.last.slice(5, 16))}</td></tr>`).join("")}</tbody></table></div>
+      ${n.bursts.length ? `<p class="small"><b>Bursting:</b> ${esc(n.bursts.map((b) => `${b.node} (${b.metric})`).join(", "))}</p>` : ""}
+      ${n.noise.length ? `<p class="small"><b>Steady noise to tune:</b> ${esc(n.noise.map((b) => `${b.node} (${b.metric}, ${b.count} alerts)`).join(", "))}</p>` : ""}
+      <div class="row"><button class="btn" type="button" data-ask="Which alerts should we tune or suppress, and which bursts need attention?">Ask the agent</button></div>`;
+  } catch (e) { showAlert($("#n-out"), e.message); }
+}
+
+/* ---------- transaction agent workspace ---------- */
+let tCurrent = null;
+async function loadTxnHome() {
+  try {
+    const d = await api("/api/txn-agent/transactions");
+    const sel = $("#t-name"), keep = tCurrent || sel.value;
+    sel.innerHTML = d.transactions.length ? d.transactions.map((t) => `<option ${t.name === keep ? "selected" : ""}>${esc(t.name)}</option>`).join("") : '<option value="">No business services found in the CMDB</option>';
+    $("#t-impacted").innerHTML = d.impacted.map((t) => `<button class="imp" type="button" data-trace="${esc(t.transaction)}">
+        <span class="row" style="justify-content:space-between"><b>${esc(t.transaction)}</b><span class="note">${t.incidents.length} P1/P2 · Trace →</span></span>
+        <span class="note mono">${esc(t.paths[0] || "")}</span>
+        <span class="note">${esc(t.incidents.map((i) => `${i.number} ${i.short_description}`).slice(0, 2).join(" · "))}</span></button>`).join("") || '<p class="note">No open P1/P2 incidents sit under a business transaction.</p>';
+    if (!tCurrent && d.impacted[0]) tracePath(d.impacted[0].transaction);
+  } catch (e) { showAlert($("#t-impacted"), e.message); }
+}
+async function tracePath(name) {
+  name = String(name || "").trim(); if (!name) return;
+  if (agent !== "txn") switchAgent("txn", { tab: "tpath", skipLoad: loaded.txn }); else selectTab("tpath");
+  if (!loaded.tpath) { loaded.tpath = true; tCurrent = name; loadTxnHome(); }
+  tCurrent = name; history.replaceState(null, "", "#txn/" + encodeURIComponent(name));
+  if ([...$("#t-name").options].some((o) => o.value === name || o.text === name)) $("#t-name").value = name;
+  $("#t-out").innerHTML = `<p class="note">Tracing ${esc(name)} through the CMDB…</p>`; $("#t-go").disabled = true;
+  try { renderPath(await api("/api/txn-agent/trace?name=" + encodeURIComponent(name))); }
+  catch (e) { showAlert($("#t-out"), e.message); }
+  finally { $("#t-go").disabled = false; }
+}
+function renderPath(r) {
+  const hops = r.hops.map((h) => {
+    const top = h.incidents[0];
+    return `<div class="hop ${esc(h.status)} ${h.origin ? "origin" : ""}" style="margin-left:${Math.min(h.depth, 6) * 18}px">
+      <div class="hop-head"><span class="dot ${esc(h.status)}"></span><b>${esc(h.name)}</b>${h.origin ? '<span class="origin-tag">likely origin</span>' : ""}<span class="rel">${h.parent ? `${esc(h.relation)} ← ${esc(h.parent)}` : "entry point"}</span></div>
+      <span class="note">${esc(h.why)}</span>
+      ${h.incidents.length ? `<div class="chipset">${h.incidents.map((i) => `<button class="inc-link" type="button" data-inc="${esc(i.number)}" title="${esc(i.short_description)}">${esc(i.number)} P${esc(String(i.priority || "").slice(0, 1))}</button>`).join("")}</div>` : ""}
+      ${h.changes.length ? `<span class="note">${h.changes.map((c) => `<b class="mono">${esc(c.number)}</b> ${esc(c.short_description)} (${esc(c.hours_ago)}h ago)`).join(" · ")}</span>` : ""}
+      ${h.origin && top ? `<div class="row"><button class="btn primary" type="button" data-goto-rca="${esc(top.number)}">Investigate ${esc(top.number)} with RCA →</button></div>` : ""}
+    </div>`; }).join("");
+  mapData = r;
+  const edges = r.hops.filter((h) => h.parent).map((h) => ({ from: h.parent, to: h.name, label: h.relation === "depends on" ? "" : h.relation, bad: h.status !== "healthy" && (h.origin || r.hops.some((x) => x.origin && x.name !== h.name && isAncestor(r, h.name, x.name))) }));
+  const depth = bfsDepth(r.hops.map((h) => h.name), edges, r.transaction);
+  mapNodes = r.hops.map((h) => ({ id: h.name, depth: depth[h.name], cls: h.status, line2: `${h.status}${h.incidents.length ? " · " + h.incidents.length + " open" : ""}${h.changes.length ? " · change" : ""}`, role: h.origin ? "origin" : "", tag: "" }));
+  mapEdges = edges;
+  $("#t-out").innerHTML = `<div class="vbox ${r.status === "healthy" ? "" : "weak"}"><b>${esc(r.verdict)}</b><span class="small">${r.hop_count} systems checked at ${esc(r.checked_at)}${r.truncated ? " (map truncated)" : ""}</span></div>
+    <div class="flow-wrap" id="t-flow">${flowSvg(mapNodes, mapEdges, null)}</div>
+    <div class="legend"><span><i></i>healthy</span><span><i class="s"></i>degraded</span><span><i class="e"></i>down</span><span><i class="o"></i>likely origin</span><span>Arrows: depends on. Click a system for its recent logs and incidents.</span></div>
+    <div id="t-node"></div>
+    <details><summary class="small"><b>List view</b></summary><div class="hops" style="margin-top:8px">${hops}</div></details><p class="note">${esc(r.note)}</p>`;
+  const o = r.hops.find((h) => h.origin);
+  if (o) openMapSystem(o.name);
+}
+let mapData = null, mapNodes = [], mapEdges = [];
+function isAncestor(r, a, b) {  // is a an ancestor of b in the service map
+  let cur = r.hops.find((h) => h.name === b);
+  while (cur && cur.parent) { if (cur.parent === a) return true; cur = r.hops.find((h) => h.name === cur.parent); }
+  return false;
+}
+async function openMapSystem(id) {
+  const h = mapData && mapData.hops.find((x) => x.name === id); if (!h) return;
+  $("#t-flow").innerHTML = flowSvg(mapNodes, mapEdges, id);
+  const inc = h.incidents[0];
+  $("#t-node").innerHTML = `<div class="sys"><div class="sys-head"><b>${esc(id)}</b>${h.origin ? '<span class="role origin">likely origin</span>' : ""}<span class="note">${esc(h.why)}</span></div>
+    ${h.incidents.length ? `<div class="list">${h.incidents.map((i) => rowItem({ ...i, age_hours: null })).join("")}</div>` : ""}
+    ${h.changes.length ? `<div class="stack">${h.changes.map((c) => `<div class="card"><b class="mono">${esc(c.number)}</b>${esc(c.short_description)}<span class="note">${esc(c.state || "")} · ended ${esc(c.ended)} UTC</span></div>`).join("")}</div>` : ""}
+    <div><span style="font:600 11px var(--f-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Recent system log (last 30 min)</span><div id="t-logs"><p class="note">Loading ${esc(id)} logs…</p></div></div>
+    <div class="row">${inc ? `<button class="btn" type="button" data-goto-rca="${esc(inc.number)}">Investigate ${esc(inc.number)} with RCA →</button>` : ""}</div></div>`;
+  try { $("#t-logs").innerHTML = logTable(await api(`/api/txn-agent/logs?service=${encodeURIComponent(id)}&minutes=30`), false); }
+  catch (e) { showAlert($("#t-logs"), e.message); }
+}
+/* ---------- reliability agent ---------- */
+const pct = (v) => (v == null ? "–" : `${v}%`);
+function budgetBar(rem) {
+  if (rem == null) return '<div class="bud"></div>';
+  if (rem <= 0) return '<div class="bud ex" title="exhausted"></div>';
+  return `<div class="bud"><i class="${rem < 25 ? "low" : rem < 50 ? "mid" : ""}" style="width:${Math.min(rem, 100)}%"></i></div>`;
+}
+function burnChips(b) {
+  const th = { "5m": 14.4, "1h": 14.4, "30m": 6, "6h": 6, "2h": 3, "24h": 3, "72h": 1 };
+  return `<div class="burns">${Object.entries(b || {}).map(([k, v]) => `<span class="${v != null && v >= th[k] ? "hot" : v != null && v >= 1 ? "warm" : ""}" title="burn rate over ${k}">${k} ${v == null ? "–" : v + "×"}</span>`).join("")}</div>`;
+}
+function budgetChart(s) {
+  const pts = s.series || []; if (pts.length < 2) return "";
+  const W = 560, H = 120, P = 26;
+  const ys = pts.map((p) => p.remaining_pct), lo = Math.min(0, ...ys) - 5, hi = 100;
+  const X = (i) => P + (i / (pts.length - 1)) * (W - P - 8), Y = (v) => 8 + (1 - (v - lo) / (hi - lo)) * (H - 26);
+  const line = pts.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(p.remaining_pct).toFixed(1)}`).join(" ");
+  const dayIdx = (d) => pts.findIndex((p) => p.day >= String(d).slice(0, 10));
+  const marks = (s.incidents || []).map((i) => { const k = dayIdx(i.opened); return k < 0 ? "" : `<circle class="mi" cx="${X(k)}" cy="${Y(pts[k].remaining_pct)}" r="4"><title>${esc(i.number)}: ${i.budget_cost_pct}% of budget</title></circle>`; }).join("")
+    + (s.changes || []).map((c) => { const k = dayIdx(c.ended); return k < 0 ? "" : `<path class="mc" d="M${X(k) - 5},${H - 14} L${X(k) + 5},${H - 14} L${X(k)},${H - 22} z"><title>${esc(c.number)} ${esc(c.short_description || "")}</title></path>`; }).join("");
+  return `<svg class="bchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Error budget remaining over the window">
+    ${[50, 25].map((b) => `<line class="band" x1="${P}" x2="${W - 8}" y1="${Y(b)}" y2="${Y(b)}"/><text x="2" y="${Y(b) + 3}">${b}%</text>`).join("")}
+    <line class="zero" x1="${P}" x2="${W - 8}" y1="${Y(0)}" y2="${Y(0)}"/><text x="2" y="${Y(0) + 3}">0%</text><text x="2" y="${Y(100) + 6}">100%</text>
+    <path class="ln" d="${line}"/>${marks}<text x="${P}" y="${H - 2}">${esc(pts[0].day.slice(5))}</text><text x="${W - 8}" y="${H - 2}" text-anchor="end">today</text></svg>`;
+}
+async function loadSlos(focus = "") {
+  $("#s2-out").innerHTML = '<p class="note">Evaluating SLOs and error budgets…</p>';
+  try {
+    const d = await api("/api/slo-agent/slos");
+    $("#slo-count").textContent = d.summary.page ? String(d.summary.page) : "";
+    const cards = d.slos.map((s) => {
+      if (!s.available) return `<div class="slo"><div class="slo-head"><b class="grow">${esc(s.service)}</b><span class="stb unknown">no data</span></div><span class="small">${esc(s.name)}</span><span class="note">${esc(s.detail || "")}</span></div>`;
+      const inc = s.incidents[0];
+      return `<div class="slo ${esc(s.state)}" data-slo-svc="${esc(s.service)}">
+        <div class="slo-head"><b>${esc(s.service)}</b><span class="small grow">${esc(s.name)} · ${s.objective}% / ${s.window_days}d</span><span class="stb ${esc(s.state)}">${esc(s.state)}</span><span class="stb ${esc(s.policy.level)}">${esc(s.policy.level)}</span></div>
+        ${budgetBar(s.remaining_pct)}
+        <span class="small"><b>${s.remaining_pct <= 0 ? `Budget exhausted (${s.remaining_pct}%)` : `${s.remaining_pct}% budget left`}</b> · attainment ${s.attainment}% · ${s.consumed_pct}% consumed${s.exhausted_in_days != null ? ` · at the 24h burn rate it is gone in <b>${s.exhausted_in_days < 1 ? Math.round(s.exhausted_in_days * 24) + " h" : s.exhausted_in_days + " days"}</b>` : ""}</span>
+        ${burnChips(s.burn)}
+        ${s.alerts.length ? `<span class="small" style="color:var(--red)"><b>Alert:</b> ${esc(s.alerts.map((a) => `${a.severity} (${a.rule})`).join("; "))}</span>` : ""}
+        ${s.change_window ? `<span class="note">Burning during change window <b class="mono">${esc(s.change_window.number)}</b> ${esc(s.change_window.short_description)} (until ${esc(s.change_window.end.slice(11, 16))} UTC)</span>` : ""}
+        ${budgetChart(s)}
+        ${s.incidents.length ? `<span class="note"><b>Budget spent by:</b> ${s.incidents.slice(0, 3).map((i) => `${inline(i.number)} ${i.budget_cost_pct}% (${esc(i.short_description)})`).join(" · ")}</span>` : ""}
+        ${s.changes.filter((c) => c.suspect).length ? `<span class="note"><b>Burn jumped after:</b> ${s.changes.filter((c) => c.suspect).map((c) => `<b class="mono">${esc(c.number)}</b> ${esc(c.short_description)} (×${c.jump})`).join(" · ")}</span>` : ""}
+        <span class="note">${esc(s.policy.text)}${s.owner ? ` · owner <b>${esc(s.owner)}</b>` : ""}${s.business_services.length ? ` · affects <b>${esc(s.business_services.join(", "))}</b>` : ""}</span>
+        <div class="row">${inc ? `<button class="btn" type="button" data-goto-rca="${esc(inc.number)}">Investigate ${esc(inc.number)} with RCA →</button>` : ""}
+          <button class="btn" type="button" data-slo-changes="${esc(s.service)}">Changes on ${esc(s.service)} →</button>
+          <button class="btn alm" type="button" data-alm='${esc(JSON.stringify({ kind: "slo", ref: s.service }))}'>Create feature…</button>
+          <button class="btn ghost" type="button" data-ask="Explain the ${esc(s.service)} SLO: what is burning the budget and what should we do?">Explain</button></div></div>`; }).join("");
+    $("#s2-out").innerHTML = `${d.mock ? '<div class="vbox weak"><span class="small">MOCK SLI stream (SERVICENOW_MODE=mock). Define SLOs in aiops_config.json and connect Dynatrace SLOs or Splunk SLI searches.</span></div>' : ""}
+      <div class="kpis k4">${kpi("paging (fast burn)", d.summary.page, d.summary.page ? "hot" : "")}${kpi("ticket (slow burn)", d.summary.ticket, d.summary.ticket ? "warn" : "")}${kpi("in freeze", d.summary.freeze, d.summary.freeze ? "hot" : "")}${kpi("SLOs", d.summary.total)}</div>
+      <span class="note">Evaluated ${esc(d.checked_at)}. Chart: budget left over the window; ● incident, ▲ change.</span>
+      ${cards || '<p class="note">No SLOs defined yet. Add "slos" to aiops_config.json (see docs/SRE.md).</p>'}`;
+    if (focus) { const el = document.querySelector(`#s2-out [data-slo-svc="${CSS.escape(focus)}"]`); if (el) el.scrollIntoView({ block: "start" }); }
+  } catch (e) { showAlert($("#s2-out"), e.message); }
+}
+async function loadScorecard() {
+  try {
+    const rows = await api("/api/slo-agent/scorecard");
+    $("#sc-out").innerHTML = `<p class="note">Per service: worst SLO, P1/P2 in 28 days, MTTR, change failure rate (changes followed by a P1/P2 within 24h, 90 days) and deploy frequency.</p>
+      <div class="tblwrap"><table class="tbl"><thead><tr><th>Service</th><th>Budget</th><th>Policy</th><th>P1/P2 28d</th><th>Open</th><th>MTTR</th><th>Change fail</th><th>Deploys/wk</th></tr></thead><tbody>
+      ${rows.map((r) => `<tr><td class="mono">${esc(r.service)}<div class="note">${esc(r.slo || "no SLO")}</div></td><td style="min-width:90px">${budgetBar(r.remaining_pct)}<span class="note">${pct(r.remaining_pct)}</span></td>
+        <td>${r.policy ? `<span class="stb ${esc(r.policy)}">${esc(r.policy)}</span>` : "–"}</td><td>${r.p1p2_28d}</td><td>${r.open_p1p2}</td><td>${r.mttr_h != null ? r.mttr_h + " h" : "–"}</td>
+        <td>${r.change_failure_rate != null ? Math.round(r.change_failure_rate * 100) + "%" : "–"} <span class="note">${r.failed_changes_90d ?? 0}/${r.changes_90d ?? 0}</span></td><td>${r.deploys_per_week ?? "–"}</td></tr>`).join("")}</tbody></table></div>`;
+  } catch (e) { showAlert($("#sc-out"), e.message); }
+}
+
+/* ---------- change guard ---------- */
+const recColor = (r) => (r === "HOLD" ? "var(--red)" : r === "CANARY" ? "var(--amber)" : "var(--good)");
+function fromNow(raw) {
+  const t = Date.parse(String(raw).replace(" ", "T") + "Z"); if (isNaN(t)) return raw || "";
+  const h = (t - Date.now()) / 3.6e6; return h < 0 ? `${Math.round(-h)}h ago` : h < 1 ? `in ${Math.round(h * 60)} min` : h < 48 ? `in ${Math.round(h)}h` : `in ${Math.round(h / 24)} days`;
+}
+async function loadUpcoming() {
+  $("#cu-out").innerHTML = '<p class="note">Assessing upcoming changes…</p>';
+  try {
+    const d = await api("/api/change-agent/upcoming?days=7");
+    const holds = d.changes.filter((c) => c.recommendation === "HOLD").length;
+    $("#chg-count").textContent = holds ? String(holds) : "";
+    $("#cu-out").innerHTML = `${d.note ? `<div class="vbox weak"><span class="small">${esc(d.note)}</span></div>` : ""}
+      <div class="kpis k4">${kpi("hold", holds, holds ? "hot" : "")}${kpi("canary", d.changes.filter((c) => c.recommendation === "CANARY").length, "")}${kpi("go", d.changes.filter((c) => c.recommendation === "GO").length)}${kpi("next 7 days", d.changes.length)}</div>
+      <div class="list">${d.changes.map((c) => `<button class="chg" type="button" data-chg="${esc(c.number)}"><span class="stb ${esc(c.recommendation || "unknown")}">${esc(c.recommendation || "?")}</span>
+        <span><b class="mono">${esc(c.number)}</b> ${esc(c.short_description || "")}</span><span class="score" title="risk ${c.score}"><i style="width:${c.score || 0}%;background:${recColor(c.recommendation)}"></i></span>
+        <span class="meta">${esc(c.ci || "no CI")} · ${esc(c.type || "")} · starts ${esc(fromNow(c.start))} · risk ${c.score ?? "–"}/100${c.reliability_fix ? " · reliability fix" : ""} · ${esc(c.why || c.error || "")}</span></button>`).join("") || '<p class="note">No changes found.</p>'}</div>`;
+  } catch (e) { showAlert($("#cu-out"), e.message); }
+}
+async function assessChange(num, verifyToo = false) {
+  num = String(num || "").trim().toUpperCase(); if (!num) return;
+  if (agent !== "change") switchAgent("change", { tab: "cas", skipLoad: loaded.change }); else selectTab("cas");
+  $("#ca-num").value = num; history.replaceState(null, "", "#change/" + num);
+  $("#ca-out").innerHTML = `<p class="note">Assessing ${esc(num)}…</p>`;
+  try {
+    const a = await api("/api/change-agent/assess?number=" + encodeURIComponent(num));
+    const g = a.guardrails;
+    const blastNodes = [...a.business_services.map((s) => ({ id: s, depth: 0, cls: "ok", line2: "business service", role: "", tag: "" })), { id: a.ci || "CI", depth: a.business_services.length ? 1 : 0, cls: a.open_incidents.length ? "error" : "ok", line2: `${a.open_incidents.length} open incident(s)`, role: "", tag: "" }];
+    const blastEdges = a.business_services.map((s) => ({ from: s, to: a.ci, label: "", bad: false }));
+    $("#ca-out").innerHTML = `
+      <div class="recb ${esc(a.recommendation)}"><span class="big">${esc(a.recommendation)}</span><div><b>${esc(a.number)}</b> ${esc(a.short_description)}<div class="small">${esc(a.why)}</div></div><span class="stb ${esc(a.recommendation)}" style="margin-left:auto">risk ${a.score}/100</span></div>
+      <span class="note">CI <b>${esc(a.ci)}</b> · ${esc(a.type || "")} · ServiceNow risk ${esc(a.risk_field || "–")} · ${esc(a.state || "")} · starts ${esc(a.start || "–")} UTC (${esc(fromNow(a.start))}) · ${esc(a.assignment_group || "")}${a.reliability_fix ? " · <b>reliability fix</b>" : ""}</span>
+      <div class="sec"><h4>Risk factors</h4>${a.factors.map((f) => `<div class="fac"><b>${esc(f.label)}${f.hard_hold ? '<span class="hh">HARD HOLD</span>' : ""}</b><span class="pts ${f.points ? "" : "z"}">+${f.points}</span><span>${esc(f.detail)}${f.evidence.length ? `<div class="chipset" style="margin-top:3px">${f.evidence.map((e) => /^INC\d{7}$/.test(e) ? `<button class="inc-link" type="button" data-inc="${esc(e)}">${esc(e)}</button>` : `<span class="cat">${esc(e)}</span>`).join("")}</div>` : ""}</span></div>`).join("")}</div>
+      <div class="sec"><h4>Guardrails</h4><div class="grd"><div><b>Plan</b><ol>${g.plan.map((x) => `<li>${esc(x)}</li>`).join("")}</ol></div><div><b>Watch</b><ul>${g.watch.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>
+        <div><b>Roll back if</b><ul>${g.rollback_triggers.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div><div><b>Pre-checks</b><ul>${g.pre_checks.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div></div></div>
+      <div class="sec"><h4>Blast radius</h4><div class="flow-wrap" id="ca-flow">${flowSvg(blastNodes, blastEdges, null)}</div></div>
+      ${a.slo ? `<div class="sec"><h4>Error budget on ${esc(a.ci)}</h4><div class="slo ${esc(a.slo.state)}"><div class="slo-head"><b class="grow">${esc(a.slo.name)}</b><span class="stb ${esc(a.slo.policy.level)}">${esc(a.slo.policy.level)}</span></div>${budgetBar(a.slo.remaining_pct)}<span class="small">${pct(a.slo.remaining_pct)} left · ${esc(a.slo.policy.text)}</span>${burnChips(a.slo.burn)}</div></div>` : ""}
+      <div class="row"><button class="btn primary" type="button" data-cpost="${esc(a.number)}">Post assessment to ${esc(a.number)}…</button>
+        <button class="btn" type="button" data-cverify="${esc(a.number)}">Verify after deploy</button>
+        <button class="btn alm" type="button" data-alm='${esc(JSON.stringify({ kind: "change", ref: a.number }))}'>Create story…</button>
+        <button class="btn ghost" type="button" data-ask="Explain the risk of ${esc(a.number)} and what would make it safe to ship">Explain</button></div>
+      <div id="ca-verify"></div>`;
+    if (verifyToo) verifyChange(num);
+  } catch (e) { showAlert($("#ca-out"), e.message); }
+}
+async function verifyChange(num) {
+  const box = $("#ca-verify"); if (!box) return;
+  box.innerHTML = '<p class="note">Checking SLO burn and incidents after the change…</p>';
+  try {
+    const v = await api("/api/change-agent/verify?number=" + encodeURIComponent(num));
+    box.innerHTML = `<div class="sec"><h4>Post-deploy verification</h4><div class="vbox ${v.verdict === "healthy" ? "" : "weak"}"><b>${esc(v.verdict)}</b><span class="small">${esc(v.detail || "")}</span></div>
+      ${(v.sli || []).map((x) => `<span class="small">${esc(x.slo)}: burn ${x.burn_before}× before → <b>${x.burn_after}×</b> after${x.regressed ? " (regressed)" : ""}</span>`).join("<br>")}
+      ${(v.incidents_after || []).length ? `<div class="list">${v.incidents_after.map((i) => `<button class="item" type="button" data-goto-rca="${esc(i.number)}"><span class="num">${esc(i.number)}</span><span class="sd">${esc(i.short_description)}</span><span class="${prioClass(i.priority)}">${prioLabel(i.priority)}</span><span class="meta">${esc(i.cmdb_ci || "")} · ${i.minutes_after} min after the change · open RCA →</span></button>`).join("")}</div>` : ""}</div>`;
+  } catch (e) { showAlert(box, e.message); }
+}
+async function postAssessment(num, btn) {
+  btn.disabled = true;
+  try {
+    const r = await api("/api/change-agent/post", { number: num });
+    (r.pending || []).forEach((p) => approvalCard(p, $("#ca-out"), false, "change"));
+    if (!r.pending?.length) $("#ca-out").insertAdjacentHTML("beforeend", `<pre class="out">${esc(r.output)}</pre>`);
+  } catch (e) { $("#ca-out").insertAdjacentHTML("beforeend", `<div class="alert">${esc(e.message)}</div>`); btn.disabled = false; }
+}
+async function loadDora() {
+  try {
+    const rows = await api("/api/change-agent/dora?days=90");
+    $("#cd-out").innerHTML = `<p class="note">90 days, from ServiceNow changes and incidents. Change failure = a P1/P2 on the CI within 24h of the change ending (or closed unsuccessful). Lead time for changes needs Git/CI-CD (planned).</p>
+      <div class="tblwrap"><table class="tbl"><thead><tr><th>Service</th><th>Deploys/wk</th><th>Change failure</th><th>MTTR</th><th>Failed changes</th></tr></thead><tbody>
+      ${rows.map((r) => `<tr><td class="mono">${esc(r.service)}</td><td>${r.deploys_per_week ?? "–"}</td><td><b>${r.change_failure_rate != null ? Math.round(r.change_failure_rate * 100) + "%" : "–"}</b> <span class="note">${r.failed ?? 0}/${r.changes ?? 0}</span></td><td>${r.mttr_h != null ? r.mttr_h + " h" : "–"}</td>
+        <td>${(r.failed_changes || []).map((f) => `<span class="cat" title="${esc(f.short_description || "")}">${esc(f.number)}${f.incident ? " → " + esc(f.incident) : ""}</span>`).join(" ")}</td></tr>`).join("")}</tbody></table></div>`;
+  } catch (e) { showAlert($("#cd-out"), e.message); }
+}
+async function loadPolicy() {
+  try {
+    const p = await api("/api/change-agent/policy");
+    $("#cp-out").innerHTML = `<div class="sec"><h4>Change policy</h4><div class="grd">
+      <div><b>Freeze windows</b><ul>${p.freeze_windows.map((f) => `<li>${esc(f.name)}: ${esc(f.from)} → ${esc(f.to)}${f.services ? ` (${esc(f.services.join(", "))})` : ""}, ${esc(f.allow || "no changes")}</li>`).join("") || "<li>None</li>"}</ul></div>
+      <div><b>Peak hours</b><ul><li>${esc(p.peak_hours)} ${esc(p.peak_days)}, ${esc(p.timezone)}</li></ul></div>
+      <div><b>Critical services</b><ul>${p.critical_services.map((s) => `<li>${esc(s)}</li>`).join("") || "<li>None</li>"}</ul></div>
+      <div><b>Thresholds</b><ul><li>HOLD ≥ ${p.thresholds.hold}</li><li>CANARY ≥ ${p.thresholds.canary}</li><li>Hard holds: budget frozen, open P1/P2 on the CI, freeze window (reliability fixes become CANARY with SRE approval)</li></ul></div></div></div>
+      <p class="note">Configure in aiops_config.json → "change_policy" (docs/SRE.md).</p>`;
+  } catch (e) { showAlert($("#cp-out"), e.message); }
+}
+
+/* ---------- ALM composer: incident / anomaly / RCA action / trace / SLO / change → work item ---------- */
+let almState = null;
+const ALM_TYPES = ["User Story", "Feature", "Defect", "Spike"];
+const ALM_KIND = { incident: "incident", rca_action: "RCA action", anomaly: "anomaly", transaction: "transaction", slo: "SLO", change: "change" };
+async function openAlm(spec) {
+  const dlg = $("#alm-dlg");
+  $("#alm-title").textContent = "Create work item";
+  $("#alm-body").innerHTML = `<p class="note">Drafting from ${esc(ALM_KIND[spec.kind] || spec.kind)} ${esc(spec.ref)}…</p>`;
+  if (!dlg.open) dlg.showModal();
+  try {
+    const d = await api("/api/alm/draft", { kind: spec.kind, ref: spec.ref, index: spec.index || 0 });
+    almState = { spec, ...d };
+    renderAlm();
+  } catch (e) { showAlert($("#alm-body"), e.message); }
+}
+function renderAlm() {
+  const { context: c, item: it, targets: tg, draft_source } = almState;
+  $("#alm-title").textContent = `Create work item from ${ALM_KIND[c.kind] || c.kind} ${c.ref}`;
+  const tsel = tg.map((t) => `<option value="${esc(t.id)}">${esc(t.label)}</option>`).join("");
+  const projOpts = (id) => ((tg.find((t) => t.id === id) || {}).projects || []).filter(Boolean);
+  const first = tg[0];
+  $("#alm-body").innerHTML = `
+    <details class="evid-box"><summary><b>Evidence</b> · ${esc(c.links.join(", ") || c.ref)} · drafted by ${draft_source === "llm" ? "the LLM" : "template"}</summary><ul>${c.facts.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></details>
+    ${c.actions ? `<label>Corrective action<select id="alm-act">${c.actions.map((a, i) => `<option value="${i}" ${i === (almState.spec.index || 0) ? "selected" : ""}>${esc(a)}</option>`).join("")}</select></label>` : ""}
+    <div><span class="note">Type</span><div class="typeseg" id="alm-type">${ALM_TYPES.map((t) => `<button type="button" aria-pressed="${t === it.type}" data-type="${t}">${t}</button>`).join("")}</div></div>
+    <label>Title<input id="alm-t" value="${esc(it.title)}" maxlength="200"></label>
+    <label>User story<textarea id="alm-us" rows="2">${esc(it.user_story || "")}</textarea></label>
+    <label>Description<textarea id="alm-d" rows="4">${esc(it.description || "")}</textarea></label>
+    <label>Acceptance criteria (one per line)<textarea id="alm-ac" rows="4">${esc((it.acceptance_criteria || []).join("\n"))}</textarea></label>
+    <div class="alm-grid">
+      <label>ALM${tg.length ? `<select id="alm-tg">${tsel}</select>` : '<input value="not connected" disabled>'}</label>
+      <label>Project<input id="alm-pj" list="alm-pjs" value="${esc(first ? projOpts(first.id)[0] || "" : "")}"><datalist id="alm-pjs">${first ? projOpts(first.id).map((p) => `<option value="${esc(p)}">`).join("") : ""}</datalist></label>
+      <label>Priority<select id="alm-pr">${["Highest", "High", "Medium", "Low"].map((p) => `<option ${p === it.priority ? "selected" : ""}>${p}</option>`).join("")}</select></label>
+      <label>Story points<select id="alm-sp"><option value="">–</option>${[1, 2, 3, 5, 8, 13].map((n) => `<option ${n === it.story_points ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+    </div>
+    <label id="alm-sysw" hidden>SynthoGEN pushes to<select id="alm-sys"></select></label>
+    <label>Labels (comma separated)<input id="alm-lb" value="${esc((it.labels || []).join(", "))}"></label>
+    ${c.writeback ? `<label class="wbline"><input type="checkbox" id="alm-wb" checked> Add a work note with the link to ${esc(c.writeback.number)} in ServiceNow</label>` : ""}
+    ${tg.length ? "" : '<div class="vbox weak"><span class="small">No ALM is connected. Set AIOPS_SYNTHOGEN_MCP_URL (preferred), or Jira / Rally / Azure DevOps settings in .env. You can copy the draft meanwhile.</span></div>'}
+    <div class="row"><button class="btn primary" type="button" id="alm-create" ${tg.length ? "" : "disabled"}>Create in ${esc(first ? first.label : "ALM")}…</button>
+      <button class="btn" type="button" id="alm-regen">Regenerate</button><button class="btn ghost" type="button" id="alm-copy">Copy as Markdown</button></div>
+    <div id="alm-result"></div>`;
+  const syncSys = () => { const t = tg.find((x) => x.id === ($("#alm-tg") || {}).value); const sys = (t && t.systems) || [];
+    $("#alm-sysw").hidden = !sys.length; $("#alm-sys").innerHTML = sys.map((x) => `<option value="${esc(x)}">${esc(x.toUpperCase())}</option>`).join(""); };
+  syncSys();
+  $("#alm-type").onclick = (e) => { const b = e.target.closest("[data-type]"); if (!b) return; document.querySelectorAll("#alm-type button").forEach((x) => x.setAttribute("aria-pressed", x === b)); };
+  if ($("#alm-tg")) $("#alm-tg").onchange = () => { const id = $("#alm-tg").value; const ps = projOpts(id); $("#alm-pjs").innerHTML = ps.map((p) => `<option value="${esc(p)}">`).join(""); $("#alm-pj").value = ps[0] || ""; $("#alm-create").textContent = `Create in ${tg.find((t) => t.id === id).label}…`; syncSys(); };
+  if ($("#alm-act")) $("#alm-act").onchange = () => openAlm({ ...almState.spec, index: Number($("#alm-act").value) });
+  $("#alm-regen").onclick = () => openAlm(almState.spec);
+  $("#alm-copy").onclick = async () => { const md = almMarkdown(); try { await navigator.clipboard.writeText(md); } catch { /* ignore */ } $("#alm-copy").textContent = "Copied"; };
+  $("#alm-create").onclick = createAlm;
+}
+function almItem() {
+  return { type: (document.querySelector('#alm-type [aria-pressed="true"]') || {}).dataset?.type || "User Story", title: $("#alm-t").value.trim(),
+    user_story: $("#alm-us").value.trim(), description: $("#alm-d").value.trim(), acceptance_criteria: $("#alm-ac").value.split("\n").map((x) => x.trim()).filter(Boolean),
+    priority: $("#alm-pr").value, story_points: $("#alm-sp").value ? Number($("#alm-sp").value) : null, labels: $("#alm-lb").value.split(",").map((x) => x.trim()).filter(Boolean),
+    ...($("#alm-sysw").hidden ? {} : { system: $("#alm-sys").value }) };
+}
+function almMarkdown() {
+  const it = almItem(), c = almState.context;
+  return `## ${it.type}: ${it.title}\n\n${it.user_story}\n\n${it.description}\n\n**Acceptance criteria**\n${it.acceptance_criteria.map((a) => "- " + a).join("\n")}\n\nPriority: ${it.priority} · Labels: ${it.labels.join(", ")} · Links: ${c.links.join(", ")}`;
+}
+async function createAlm() {
+  const btn = $("#alm-create"); btn.disabled = true;
+  const it = almItem();
+  if (!it.title) { showAlert($("#alm-result"), "Give the work item a title."); btn.disabled = false; return; }
+  try {
+    const r = await api("/api/alm/create", { kind: almState.spec.kind, ref: almState.spec.ref, index: almState.spec.index || 0, target: $("#alm-tg").value,
+      project: $("#alm-pj").value.trim(), item: it, writeback: $("#alm-wb") ? $("#alm-wb").checked : false });
+    const box = $("#alm-result"); box.innerHTML = "";
+    (r.pending || []).forEach((p) => approvalCard(p, box, false, "alm"));
+    if (!r.pending?.length) box.innerHTML = `<pre class="out">${esc(r.output)}</pre>`;
+  } catch (e) { showAlert($("#alm-result"), e.message); btn.disabled = false; }
+}
+async function refreshBacklog() {
+  try { const rows = await api("/api/alm/items"); $("#backlog-n").textContent = rows.length; return rows; } catch { return []; }
+}
+async function openBacklog() {
+  const dlg = $("#alm-dlg"); $("#alm-title").textContent = "Backlog items created from AIOps";
+  const rows = await refreshBacklog();
+  $("#alm-body").innerHTML = rows.length ? `<div class="tblwrap"><table class="tbl"><thead><tr><th>Key</th><th>Type</th><th>Title</th><th>From</th><th>ServiceNow</th><th>Created</th></tr></thead><tbody>
+    ${rows.map((x) => `<tr><td class="mono">${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.key)}</a>` : esc(x.key)}<div class="note">${esc(x.system)}</div></td><td>${esc(x.type)}</td><td>${esc(x.title)}</td><td>${esc(ALM_KIND[x.kind] || x.kind)} ${esc(x.ref)}</td><td>${x.writeback ? inline(x.writeback) : "–"}</td><td class="mono">${esc(x.created_at)}</td></tr>`).join("")}</tbody></table></div>`
+    : '<p class="note">Nothing created yet. Use "+ Create story…" on an incident, anomaly, RCA action, transaction, SLO or change.</p>';
+  if (!dlg.open) dlg.showModal();
+}
+
+/* ---------- flow diagram (shared by Track ID and Service map) ---------- */
+function flowSvg(nodes, edges, sel) {
+  // Top-down: callers above, called systems below (upstream above, downstream below).
+  // nodes: [{id, depth, cls, line2, role, tag}], edges: [{from, to, label, bad}]
+  const BW = 206, BH = 74, GX = 34, RH = 118, PT = 12, PL = 10;
+  const levels = {};
+  nodes.forEach((n) => (levels[n.depth] = levels[n.depth] || []).push(n));
+  const maxCount = Math.max(...Object.values(levels).map((l) => l.length));
+  const W = PL * 2 + maxCount * (BW + GX) - GX;
+  const nLevels = Math.max(...nodes.map((n) => n.depth)) + 1;
+  const H = PT + nLevels * RH - (RH - BH) + 10;
+  const pos = {};
+  Object.keys(levels).forEach((d) => {
+    const row = levels[d], off = ((maxCount - row.length) * (BW + GX)) / 2;
+    row.forEach((n, i) => (pos[n.id] = { x: PL + off + i * (BW + GX), y: PT + Number(d) * RH }));
+  });
+  const cut = (t, n) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
+  const eSvg = edges.filter((e) => pos[e.from] && pos[e.to]).map((e) => {
+    const a = pos[e.from], b = pos[e.to];
+    const x1 = a.x + BW / 2, y1 = a.y + BH, x2 = b.x + BW / 2, y2 = b.y - 3, my = (y1 + y2) / 2;
+    return `<path class="edge ${e.bad ? "bad" : ""}" d="M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}" marker-end="url(#arr-${e.bad ? "bad" : "ok"})"/>
+      ${e.label ? `<text class="elab ${e.bad ? "bad" : ""}" x="${(x1 + x2) / 2 + 8}" y="${my + 4}">${esc(e.label)}</text>` : ""}`; }).join("");
+  const nSvg = nodes.map((n) => {
+    const p = pos[n.id];
+    return `<g class="nd ${esc(n.cls)} ${n.role === "origin" ? "origin" : ""} ${sel === n.id ? "sel" : ""}" data-flownode="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(n.id)}: ${esc(n.line2)}${n.tag ? ", " + esc(n.tag) : ""}">
+      <rect class="box" x="${p.x}" y="${p.y}" width="${BW}" height="${BH}" rx="10"/>
+      <text class="nm" x="${p.x + 12}" y="${p.y + 22}">${esc(cut(n.id, 22))}</text>
+      <text class="st2" x="${p.x + 12}" y="${p.y + 41}">${esc(cut(n.line2 || "", 28))}</text>
+      ${n.role ? `<text class="rl ${n.role === "failure point" ? "fp" : ""}" x="${p.x + 12}" y="${p.y + 62}">${esc(n.role.toUpperCase())}</text>` : ""}
+      ${n.tag ? `<text class="tg ${esc(n.tag)}" x="${p.x + BW - 10}" y="${p.y + 62}" text-anchor="end">${esc(n.tag)}</text>` : ""}
+      <title>${esc(n.id)}: click for logs</title></g>`; }).join("");
+  return `<svg class="flow" viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;margin:0 auto" role="img" aria-label="Call flow diagram, callers above, called systems below">
+    <defs><marker id="arr-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arr ok" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="arr-bad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arr bad" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+    ${eSvg}${nSvg}</svg>`;
+}
+function bfsDepth(ids, edges, root) {
+  const depth = { [root]: 0 }, q = [root];
+  while (q.length) { const c = q.shift(); edges.filter((e) => e.from === c).forEach((e) => { if (depth[e.to] === undefined) { depth[e.to] = depth[c] + 1; q.push(e.to); } }); }
+  ids.forEach((i) => { if (depth[i] === undefined) depth[i] = 0; });
+  return depth;
+}
+function relatives(edges, id, dir) {  // dir "up": ancestors, "down": descendants
+  const out = new Set(), q = [id];
+  while (q.length) { const c = q.shift(); edges.forEach((e) => { const nxt = dir === "down" ? (e.from === c ? e.to : null) : (e.to === c ? e.from : null); if (nxt && !out.has(nxt)) { out.add(nxt); q.push(nxt); } }); }
+  return out;
+}
+
+/* ---------- Track ID: service graph from hops ---------- */
+let trackData = null, trackGraph = null;
+function trackServiceGraph(r) {
+  const byId = Object.fromEntries(r.hops.map((h) => [h.id, h]));
+  const svc = {}, order = [];
+  r.hops.forEach((h) => {
+    let s = svc[h.service];
+    if (!s) { s = svc[h.service] = { id: h.service, hops: [], status: "ok", role: "", http: [], dur: 0, start: h.start }; order.push(h.service); }
+    s.hops.push(h);
+    if (h.status === "error") s.status = "error";
+    if (h.role === "origin") s.role = "origin"; else if (h.role === "failure point" && s.role !== "origin") s.role = "failure point";
+    if (h.http_status && !s.http.includes(h.http_status)) s.http.push(h.http_status);
+    s.dur = Math.max(s.dur, h.duration_ms || 0);
+  });
+  const ek = {};
+  r.hops.forEach((h) => {
+    const p = byId[h.parent];
+    if (!p || p.service === h.service) return;
+    const k = p.service + "→" + h.service;
+    if (!ek[k]) ek[k] = { from: p.service, to: h.service, label: "", bad: false };
+    const child = svc[h.service];
+    ek[k].bad = ek[k].bad || h.status === "error" || child.role === "origin";
+    ek[k].label = h.status === "error" ? String(h.http_status || "error") : (h.duration_ms != null ? `${h.duration_ms}ms` : "");
+  });
+  const edges = Object.values(ek);
+  const depth = bfsDepth(order, edges, r.entry);
+  const rep = r.reported_at || r.entry;
+  const up = relatives(edges, rep, "up"), down = relatives(edges, rep, "down");
+  const nodes = order.map((id) => {
+    const s = svc[id];
+    const slow = s.role === "origin" && s.status !== "error";
+    const line2 = `${slow ? "slow" : s.status}${s.http.length ? " " + s.http.join("/") : ""}${s.dur ? " · " + s.dur + " ms" : ""}`;
+    return { id, depth: depth[id], cls: slow ? "slow" : s.status, line2, role: s.role, tag: id === rep ? "REPORTED" : up.has(id) ? "UPSTREAM" : down.has(id) ? "DOWNSTREAM" : "", svc: s };
+  });
+  return { nodes, edges };
+}
+async function openSystem(id) {
+  const r = trackData; if (!r || !trackGraph) return;
+  const n = trackGraph.nodes.find((x) => x.id === id); if (!n) return;
+  $("#f-flow").innerHTML = flowSvg(trackGraph.nodes, trackGraph.edges, id);
+  const v = r.services[id] || {}, s = n.svc;
+  const spans = s.hops.map((h) => `<div class="card"><span class="row"><b class="mono">${esc(h.operation || "(event)")}</b><span class="${h.status === "error" ? "sev high" : "sev new"}">${esc(h.status)}</span>${h.http_status ? `<span class="cat">HTTP ${h.http_status}</span>` : ""}${h.duration_ms != null ? `<span class="cat">${h.duration_ms} ms</span>` : ""}</span>
+      ${h.error ? `<span class="small"><b>${esc(h.error)}</b></span>` : ""}<span class="note">${esc(h.start)} UTC · ${esc(h.sources.join(", "))}${h.link ? ` · <a href="${esc(h.link)}" target="_blank" rel="noopener">open trace</a>` : ""}</span></div>`).join("");
+  const inc = (v.incidents || [])[0];
+  $("#f-node").innerHTML = `<div class="sys">
+    <div class="sys-head"><b>${esc(id)}</b>${n.tag ? `<span class="tagpill ${esc(n.tag)}">${esc(n.tag)}</span>` : ""}${n.role ? `<span class="role ${n.role === "origin" ? "origin" : "fp"}">${esc(n.role)}</span>` : ""}
+      <span class="note">${v.in_cmdb ? `owner <b>${esc(v.owner || "–")}</b> · ServiceNow ${esc(v.status || "")}` : "not in the CMDB"}</span></div>
+    <div class="stack">${spans}</div>
+    ${(v.incidents || []).length || (v.changes || []).length ? `<div class="row">${(v.incidents || []).map((i) => `<button class="inc-link" type="button" data-inc="${esc(i.number)}" title="${esc(i.short_description)}">${esc(i.number)} P${esc(String(i.priority || "").slice(0, 1))}</button>`).join("")}
+      ${(v.changes || []).map((c) => `<span class="cat" title="${esc(c.short_description)}">${esc(c.number)}</span>`).join("")}</div>` : ""}
+    <div><span class="kicker" style="font:600 11px var(--f-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.08em">System log around this transaction</span>
+      <div id="f-logs"><p class="note">Loading ${esc(id)} logs…</p></div></div>
+    <div class="row">${inc ? `<button class="btn" type="button" data-goto-rca="${esc(inc.number)}">Investigate ${esc(inc.number)} with RCA →</button>` : ""}
+      <button class="btn ghost" type="button" data-ask="What do the ${esc(id)} logs say about ${esc(r.txn_id)}?">Ask about these logs</button></div></div>`;
+  try {
+    const L = await api(`/api/txn-agent/logs?service=${encodeURIComponent(id)}&around=${encodeURIComponent(s.start)}&minutes=2&txn_id=${encodeURIComponent(r.txn_id)}`);
+    $("#f-logs").innerHTML = logTable(L, true);
+  } catch (e) { showAlert($("#f-logs"), e.message); }
+}
+function logTable(L, txn) {
+  if (L.state === "not_connected") return `<p class="note">${esc(L.detail || "Log source not connected.")}</p>`;
+  if (!L.lines.length) return `<p class="note">No log lines for ${esc(L.service)} between ${esc(L.window.from.slice(11))} and ${esc(L.window.to.slice(11))} UTC.</p>`;
+  return `<p class="note">${esc(L.source)} · ${esc(L.window.from.slice(11, 19))}–${esc(L.window.to.slice(11, 19))} UTC · ${L.lines.length} lines${txn ? " · this transaction highlighted" : ""}</p>
+    <div class="logs">${L.lines.map((l) => `<div class="${l.this_txn ? "this" : ""}"><span>${esc(l.time.slice(11, 23))}</span><span class="lv ${esc(l.level)}">${esc(l.level)}</span><span class="msg">${esc(l.host ? l.host + " " : "")}${esc(l.message)}</span></div>`).join("")}</div>`;
+}
+
+let trCurrent = null;
+async function loadTrackHome() {
+  try {
+    const d = await api("/api/txn-agent/transactions");
+    $("#f-svcs").innerHTML = d.transactions.map((t) => `<option value="${esc(t.name)}">`).join("");
+  } catch { /* optional */ }
+  if (!window.HEALTH) { try { window.HEALTH = await api("/api/health"); } catch { /* offline */ } }
+  if (window.HEALTH && window.HEALTH.mode === "mock") {
+    $("#f-examples").innerHTML = ["TXN-ENR-20261024-0207", "TXN-ENR-20261024-0311", "TXN-PAY-20261024-0412", "TXN-ENR-20261024-0199"]
+      .map((x) => `<button class="chip" type="button" data-track="${x}">${x}</button>`).join("") + '<span class="note">mock examples</span>';
+  }
+}
+async function trackTxn() {
+  const id = $("#f-id").value.trim(); if (!id) return;
+  if (agent !== "txn") switchAgent("txn", { tab: "tfind", skipLoad: loaded.txn }); else selectTab("tfind");
+  trCurrent = id; history.replaceState(null, "", "#track/" + encodeURIComponent(id));
+  $("#f-out").innerHTML = `<p class="note">Following ${esc(id)} across Splunk, AppDynamics, Dynatrace, Jaeger and Tempo…</p>`; $("#f-go").disabled = true;
+  try { renderTrack(await api(`/api/txn-agent/track?txn_id=${encodeURIComponent(id)}&reported_at=${encodeURIComponent($("#f-rep").value.trim())}`)); }
+  catch (e) { showAlert($("#f-out"), e.message); }
+  finally { $("#f-go").disabled = false; }
+}
+function renderTrack(r) {
+  const srcs = `<div class="tblwrap"><table class="tbl"><thead><tr><th>Source</th><th>State</th><th>Spans/events</th></tr></thead><tbody>${r.sources.map((x) => `<tr><td>${esc(x.label)}</td><td><span class="st ${esc(x.state)}">${esc(x.state.replace("_", " "))}</span></td><td>${x.spans}</td></tr>`).join("")}</tbody></table></div>`;
+  const snInc = r.servicenow.incidents, snNotes = r.servicenow.notes;
+  const mentions = (snInc.length || snNotes.length) ? `<div class="sec"><h4>Mentioned in ServiceNow</h4>
+      ${snInc.length ? `<div class="list">${snInc.map((i) => rowItem({ ...i, age_hours: null })).join("")}</div>` : ""}
+      ${snNotes.length ? `<ul class="tl">${snNotes.map((n) => `<li><small>${esc(n.at)} · ${esc(n.by)} · ${inline(n.number || "")}</small>${esc(n.text)}</li>`).join("")}</ul>` : ""}</div>` : "";
+  if (!r.found) {
+    $("#f-out").innerHTML = `<div class="vbox weak"><b>${esc(r.verdict)}</b></div>${r.errors.length ? `<div class="alert">${esc(r.errors.join(" · "))}</div>` : ""}${mentions}<div class="sec"><h4>Sources</h4>${srcs}</div>`;
+    return;
+  }
+  const o = r.origin, failed = r.failed;
+  const dir = failed ? `<span class="dirb ${esc(r.direction === "other branch" ? "other" : r.direction)}">${esc(r.direction)}</span>` : '<span class="dirb ok">completed</span>';
+  const total = Math.max(...r.hops.map((h) => (h.offset_ms || 0) + (h.duration_ms || 0)), 1);
+  const wf = r.hops.map((h) => {
+    const left = ((h.offset_ms || 0) / total) * 100, width = Math.max(((h.duration_ms || 0) / total) * 100, 0.6);
+    const cls = h.status === "error" ? "error" : h.role === "origin" ? "origin-ok" : "";
+    const role = h.role === "origin" ? '<span class="role origin">origin</span>' : h.role === "failure point" ? '<span class="role fp">failure point</span>' : h.role === "affected" ? '<span class="role affected">affected</span>' : "";
+    return `<div><button class="wf-row" type="button" data-wft aria-expanded="false"><span class="wf-name" style="padding-left:${Math.min(h.depth, 6) * 14}px">${role}<b>${esc(h.service)}</b><span class="muted">${esc(h.operation)}</span>${h.inferred ? '<span class="inf" title="Parent inferred from time order and CMDB relations">inferred</span>' : ""}</span>
+      <span class="wf-track"><span class="wf-bar ${cls}" style="left:${left}%;width:${width}%"></span><span class="wf-lab">${h.duration_ms != null ? h.duration_ms + " ms" : "log"}${h.http_status ? " · " + h.http_status : ""}</span></span></button>
+      <div class="ev" hidden>${h.error ? `<span><b>${esc(h.error)}</b></span>` : ""}<span>${esc(h.start)} UTC · ${esc(h.sources.join(", "))}${h.link ? ` · <a href="${esc(h.link)}" target="_blank" rel="noopener">open trace</a>` : ""}</span>
+        ${h.evidence.map((e) => `<span>${esc(e.source)} ${esc(e.kind)} ${esc(e.start.slice(11, 23))}: ${esc(e.error || e.operation)}</span>`).join("")}</div></div>`; }).join("");
+  const chain = failed ? `<div class="chain">${r.propagation.map((c, i) => `${i ? '<span class="arrow">→</span>' : ""}<span class="node ${c.service === o.service ? "origin" : esc(c.status)}" title="${esc(c.error)}">${esc(c.service)}${c.status === "slow" ? ` ${c.duration_ms} ms` : c.http_status ? " " + c.http_status : ""}</span>`).join("")}</div>` : "";
+  const svcRows = Object.entries(r.services).map(([k, v]) => `<tr><td class="mono">${esc(k)}</td><td>${v.in_cmdb ? esc(v.owner || "–") : '<span class="muted">not in CMDB</span>'}</td>
+    <td>${v.in_cmdb ? `<span class="dot ${esc(v.status)}" style="display:inline-block"></span> ${esc(v.status)}` : ""}</td>
+    <td>${(v.incidents || []).map((i) => `<button class="inc-link" type="button" data-inc="${esc(i.number)}" title="${esc(i.short_description)}">${esc(i.number)}</button>`).join(" ")}</td>
+    <td>${(v.changes || []).map((c) => `<span class="mono">${esc(c.number)}</span>`).join(" ")}</td></tr>`).join("");
+  const originSvc = o ? r.services[o.service] || {} : {};
+  const targetInc = (snInc[0] && snInc[0].number) || ((originSvc.incidents || [])[0] || {}).number || "";
+  const rcaInc = ((originSvc.incidents || [])[0] || {}).number || targetInc;
+  $("#f-out").innerHTML = `
+    <div class="vbox ${failed ? "weak" : ""}"><div class="row">${dir}${o ? `<span class="cat">${esc(o.type.replace(/_/g, " "))}</span>` : ""}</div><b>${esc(r.verdict)}</b>
+      <span class="small">Reported at <b>${esc(r.reported_at || r.entry)}</b> (${esc(r.reported_at_source)}) · entry ${esc(r.entry)} · ${r.hops.length} hops${r.trace_ids.length ? ` · trace ${esc(r.trace_ids.join(", "))}` : ""}${r.inferred_links ? " · some links inferred" : ""}</span></div>
+    ${failed ? `<div class="kpis kfit">${kpi("origin", esc(o.service), "txt")}${kpi("failure point", esc(r.failure_point), "txt")}${kpi("reported at", esc(r.reported_at), "txt")}${kpi("direction", esc(r.direction), "txt")}</div>` : ""}
+    <div class="sec"><h4>Call flow: click a system to see its logs</h4><div class="flow-wrap" id="f-flow"></div>
+      <div class="legend"><span><i></i>ok</span><span><i class="e"></i>error</span><span><i class="s"></i>slow</span><span><i class="o"></i>origin</span><span>Callers above, called systems below. Tags are relative to the reported system <b>${esc(r.reported_at || r.entry)}</b>: UPSTREAM calls it, DOWNSTREAM is called by it. Red arrows = failing calls.</span></div></div>
+    <div id="f-node"></div>
+    ${chain ? `<div class="sec"><h4>Propagation (origin → entry)</h4>${chain}</div>` : ""}
+    ${r.suspect_changes.length ? `<div class="sec"><h4>Suspect changes on the failing path</h4><div class="stack">${r.suspect_changes.map((c) => `<div class="card"><b class="mono">${esc(c.number)}</b>${esc(c.short_description)}<span class="note">${esc(c.service)} · ended ${esc(c.ended)} UTC</span></div>`).join("")}</div></div>` : ""}
+    <details class="sec"><summary><span class="kicker" style="font:600 11.5px var(--f-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.08em;cursor:pointer">Timing waterfall</span></summary><div class="wf" style="margin-top:8px">${wf}</div></details>
+    <div class="sec"><h4>ServiceNow per hop</h4><div class="tblwrap"><table class="tbl"><thead><tr><th>Service</th><th>Owner</th><th>Health</th><th>Open incidents</th><th>Changes</th></tr></thead><tbody>${svcRows}</tbody></table></div></div>
+    ${mentions}
+    <div class="row">${failed && targetInc ? `<button class="btn primary" type="button" data-tattach='${esc(JSON.stringify({ txn_id: r.txn_id, number: targetInc, reported_at: $("#f-rep").value.trim() }))}'>Add trace to ${esc(targetInc)}…</button>` : ""}
+      ${failed && rcaInc ? `<button class="btn" type="button" data-goto-rca="${esc(rcaInc)}">Investigate ${esc(rcaInc)} with RCA →</button>` : ""}
+      ${failed ? `<button class="btn alm" type="button" data-alm='${esc(JSON.stringify({ kind: "transaction", ref: r.txn_id }))}'>Create defect…</button>` : ""}
+      ${failed ? `<button class="btn ghost" type="button" data-ask="Explain why ${esc(r.txn_id)} failed and whether the cause is upstream or downstream of ${esc(r.reported_at || r.entry)}">Explain</button>` : ""}</div>
+    ${r.errors.length ? `<div class="alert">${esc(r.errors.join(" · "))}</div>` : ""}
+    <div class="sec"><h4>Sources</h4>${srcs}</div>`;
+  trackData = r; trackGraph = trackServiceGraph(r);
+  $("#f-flow").innerHTML = flowSvg(trackGraph.nodes, trackGraph.edges, null);
+  const first = (o && o.service) || r.failure_point || r.entry;
+  if (first) openSystem(first);
+}
+async function attachTrace(a, btn) {
+  btn.disabled = true;
+  const box = $("#f-out");
+  try {
+    const r = await api("/api/txn-agent/attach", a);
+    (r.pending || []).forEach((p) => approvalCard(p, box, false, "txn"));
+    if (!r.pending?.length) box.insertAdjacentHTML("beforeend", `<pre class="out">${esc(r.output)}</pre>`);
+  } catch (e) { box.insertAdjacentHTML("beforeend", `<div class="alert">${esc(e.message)}</div>`); btn.disabled = false; }
+}
+
+/* ---------- RCA agent workspace ---------- */
+const fmtH = (h) => (h == null ? "–" : h < 1 ? `${Math.round(h * 60)}m` : `${h.toFixed(1)}h`);
+async function loadRcaHome() {
+  try {
+    const rows = await api("/api/incidents?" + new URLSearchParams({ priority: "<=2", active_only: false, limit: 15 }));
+    $("#r-recent").innerHTML = rows.map((r) => `<button class="rc-chip ${r.number === rCurrent ? "on" : ""}" type="button" data-rinv="${esc(r.number)}"><b>${esc(r.number)}</b><span class="${prioClass(r.priority)}">${prioLabel(r.priority)}</span><span class="muted">${esc((r.short_description || "").slice(0, 38))}</span></button>`).join("") || '<span class="note">No P1/P2 incidents found.</span>';
+  } catch (e) { showAlert($("#r-recent"), e.message); }
+  if (!rCurrent) renderCoverage(await api("/api/rca-agent/coverage").catch(() => []));
+}
+async function investigate(num) {
+  num = String(num || "").trim().toUpperCase(); if (!num) return;
+  if (agent !== "rca") switchAgent("rca", { tab: "rinv" }); else selectTab("rinv");
+  setView("inspect");
+  if (rCurrent !== num) { rMd = ""; $("#r-copy").disabled = true; $("#r-report").innerHTML = `<p class="note">Click <b>Draft report</b> to write the RCA for ${esc(num)}.</p>`; }
+  rCurrent = num; $("#r-num").value = num;
+  history.replaceState(null, "", `#rca/${num}`);
+  document.querySelectorAll("[data-rinv]").forEach((b) => b.classList.toggle("on", b.dataset.rinv === num));
+  $("#r-inv").innerHTML = `<p class="note">Investigating ${esc(num)}: collecting evidence from every connected source…</p>`;
+  $("#r-go").disabled = true;
+  try { renderInvestigation(await api("/api/rca-agent/investigate", { number: num })); }
+  catch (e) { showAlert($("#r-inv"), e.message); }
+  finally { $("#r-go").disabled = false; }
+}
+async function refreshRca(num) {  // re-read the latest report the agent produced (no new collection)
+  try {
+    const r = await api(`/api/rca-agent/report/${encodeURIComponent(num)}`);
+    renderInvestigation(r); if (r.narrative) showReport(r);
+  } catch { /* nothing yet */ }
+}
+function syncRcaFromTools(calls) {
+  const hit = calls.filter((c) => ["start_rca", "add_observation", "draft_rca_report", "publish_rca"].includes(c.tool) && c.args && c.args.number).pop();
+  if (!hit) return;
+  const num = String(hit.args.number).toUpperCase();
+  if (num !== rCurrent) { rCurrent = num; $("#r-num").value = num; history.replaceState(null, "", `#rca/${num}`); }
+  refreshRca(num);
+  if (calls.some((c) => c.tool === "draft_rca_report")) selectTab("rrep");
+}
+function renderInvestigation(r) {
+  const h = r.header, m = r.metrics;
+  rCurrent = h.number;
+  $("#r-draft").disabled = false; $("#r-publish").disabled = false;
+  const hyps = r.hypotheses.map((x, i) => `<div class="hyp ${i === 0 && r.sufficient_evidence ? "lead" : ""}">
+      <div class="hyp-head"><b>${esc(x.title)}</b><span class="pct">${Math.round(x.confidence * 100)}%</span></div>
+      <div class="conf"><i style="width:${Math.round(x.confidence * 100)}%"></i></div>
+      <span class="cat">${esc(x.category || "")}</span>
+      <ul>${x.reasons.map((y) => `<li>${esc(y)}</li>`).join("")}</ul>
+      <div class="chipset">${x.evidence.filter(Boolean).map((e) => `<span class="evid">${esc(e)}</span>`).join("")}</div>
+      <span class="note">Next: ${esc(x.action)}</span></div>`).join("") || '<p class="note">No hypotheses yet. Add observations or connect more sources.</p>';
+  const ttr = m.time_to_resolve_h != null ? fmtH(m.time_to_resolve_h) : m.open_for_h != null ? "open " + fmtH(m.open_for_h) : "–";
+  $("#r-inv").innerHTML = `
+    <div class="detail-head"><span class="num mono">${esc(h.number)}</span><span class="${prioClass(h.priority)}">${esc(h.priority || "")}</span><span class="state">${esc(h.state || "")}</span>
+      <h3>${esc(h.short_description || "")}</h3></div>
+    <span class="note">CI ${esc(h.cmdb_ci || "–")} · ${esc(h.assignment_group || "no group")} · ${esc(h.assigned_to || "unassigned")} · opened ${esc(h.opened || "–")} UTC</span>
+    <div class="vbox ${r.sufficient_evidence ? "" : "weak"}"><b>${esc(r.verdict)}</b><span class="small">${r.sufficient_evidence ? "Ranked from the evidence below." : "Add observations or connect sources to strengthen the analysis."}</span></div>
+    <div class="kpis k4">${kpi("time to detect", fmtH(m.time_to_detect_h))}${kpi("time to acknowledge", fmtH(m.time_to_acknowledge_h))}${kpi("time to mitigate", fmtH(m.time_to_mitigate_h))}${kpi("time to resolve", ttr)}</div>
+    <div class="row"><button class="btn primary" type="button" data-rtab="rrep">Draft report →</button><button class="btn" type="button" data-rtab="rcov">Add observation</button>
+      <button class="btn ghost" type="button" data-inc="${esc(h.number)}">Open in incident agent</button></div>
+    <div class="sec"><h4>Hypotheses</h4><div class="stack">${hyps}</div></div>
+    <div class="sec"><h4>Timeline (UTC)</h4><ul class="tl2">${r.timeline.map((e) => `<li><span class="mono">${esc(e.time.slice(5, 16))}</span><span class="k k-${esc(e.kind)}">${esc(e.kind)}</span><span>${esc(e.text)}</span></li>`).join("") || '<li class="note">No events.</li>'}</ul></div>
+    ${r.evidence_gaps.length ? `<p class="note"><b>Evidence gaps:</b> ${esc(r.evidence_gaps.join(" "))}</p>` : ""}`;
+  $("#r-evidence").innerHTML = `<h4>Evidence for ${esc(h.number)} (${r.evidence.length})</h4><div class="tblwrap"><table class="tbl"><thead><tr><th>Id</th><th>Source</th><th>Kind</th><th>Finding</th><th>Time</th></tr></thead><tbody>
+    ${r.evidence.map((e) => `<tr><td class="mono">${esc(e.id)}</td><td>${esc(e.source)}</td><td>${esc(e.kind)}</td><td>${esc(e.title)}</td><td class="mono">${esc((e.time_raw || "").slice(0, 16))}</td></tr>`).join("")}</tbody></table></div>`;
+  renderCoverage(r.coverage);
+}
+function renderCoverage(cov) {
+  if (!cov || !cov.length) return;
+  const on = cov.filter((c) => c.state === "connected").length;
+  $("#cov-count").textContent = `${on}/${cov.length}`;
+  $("#r-cov").innerHTML = cov.map((c) => `<div class="dom"><b>${esc(c.label)}${c.evidence_items ? ` · ${c.evidence_items} items` : ""}</b><span class="st ${esc(c.state)}">${esc(c.state.replace("_", " "))}</span>
+    <span class="note">${esc(c.sources.map((s) => `${s.label}: ${s.detail}`).join(" · "))}</span></div>`).join("");
+}
+function showReport(r) {
+  rMd = r.markdown; $("#r-copy").disabled = false;
+  const acts = ((r.narrative || {}).actions || []);
+  $("#r-report").innerHTML = `<span class="note">Narrative: ${r.narrative_source === "llm" ? "written by the LLM from the evidence" : "template (LLM unavailable)"} · ${esc(r.status || "draft")}</span>
+    ${acts.length ? `<div class="sec"><h4>Corrective actions → backlog</h4><div class="stack">${acts.map((a, i) => `<div class="card"><span class="row" style="justify-content:space-between"><span><b>${esc(a.action)}</b><span class="note"> · ${esc(a.type || "")} · ${esc(a.owner_team || "owner tbd")} · ${esc(a.priority || "")}</span></span>
+      <button class="btn alm" type="button" data-alm='${esc(JSON.stringify({ kind: "rca_action", ref: r.header.number, index: i }))}'>Create story…</button></span></div>`).join("")}</div></div>` : ""}
+    <div class="report">${md(r.markdown)}</div>`;
+}
+async function draftReport() {
+  if (!rCurrent) return;
+  $("#r-draft").disabled = true; $("#r-report").innerHTML = `<p class="note">Writing the RCA for ${esc(rCurrent)} from the evidence…</p>`;
+  try { const r = await api("/api/rca-agent/draft", { number: rCurrent }); showReport(r); renderInvestigation(r); }
+  catch (e) { showAlert($("#r-report"), e.message); }
+  finally { $("#r-draft").disabled = false; }
+}
+async function copyReport() {
+  try { await navigator.clipboard.writeText(rMd); }
+  catch { const t = document.createElement("textarea"); t.value = rMd; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
+  $("#r-copy").textContent = "Copied"; setTimeout(() => ($("#r-copy").textContent = "Copy Markdown"), 1500);
+}
+async function publishReport() {
+  if (!rCurrent) return;
+  try {
+    const r = await api("/api/rca-agent/publish", { number: rCurrent });
+    const box = document.createElement("div"); $("#r-report").prepend(box);
+    (r.pending || []).forEach((p) => approvalCard(p, box, false, "rca"));
+    if (!r.pending?.length) box.innerHTML = `<p class="note">${esc(r.output)}</p>`;
+    if (!rMd) refreshRca(rCurrent);
+  } catch (e) { $("#r-report").insertAdjacentHTML("afterbegin", `<div class="alert">${esc(e.message)}</div>`); }
+}
+async function addObservation(ev) {
+  ev.preventDefault();
+  if (!rCurrent) { $("#r-obs-msg").textContent = "Investigate an incident first."; return; }
+  const text = $("#r-obs-text").value.trim(); if (!text) return;
+  try {
+    const o = await api("/api/rca-agent/observation", { number: rCurrent, text, at_utc: $("#r-obs-time").value.trim() });
+    $("#r-obs-text").value = ""; $("#r-obs-time").value = "";
+    $("#r-obs-msg").textContent = `Recorded ${o.id}. Re-ranking…`;
+    await investigate(rCurrent); selectTab("rcov");
+    $("#r-obs-msg").textContent = `Recorded ${o.id}; it is on the timeline and cited as ${o.id} in the report.`;
+  } catch (e) { $("#r-obs-msg").textContent = e.message; }
+}
+
+function setView(v) {
+  if (!window.matchMedia("(max-width: 900px)").matches && v === "inspect") return;
+  document.body.dataset.view = v;
+  $("#mv-chat").setAttribute("aria-selected", v === "chat"); $("#mv-inspect").setAttribute("aria-selected", v === "inspect");
+}
+
+/* ---------- wiring ---------- */
+$("#chips").onclick = (e) => { if (e.target.classList.contains("chip")) send(e.target.textContent); };
+$("#form").onsubmit = (e) => { e.preventDefault(); send($("#input").value); };
+$("#input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send($("#input").value); } });
+$("#input").addEventListener("input", autosize);
+$("#newchat").onclick = () => { A().thread = newThread(); $("#thread").textContent = `thread ${A().thread}`; msgsEl().innerHTML = ""; addMsg("bot", `<div class="bubble muted">New ${esc(A().title)} conversation started.</div>`); };
+document.querySelector(".agents").onclick = (e) => { const b = e.target.closest("[data-agent]"); if (b && b.dataset.agent !== agent) switchAgent(b.dataset.agent); };
+document.addEventListener("click", (e) => {
+  const go = e.target.closest("[data-goto-rca]"); if (go) return investigate(go.dataset.gotoRca);
+  const ri = e.target.closest("[data-rinv]"); if (ri) return investigate(ri.dataset.rinv);
+  const tr = e.target.closest("[data-trace]"); if (tr) return tracePath(tr.dataset.trace);
+  const aa = e.target.closest("[data-aact]"); if (aa) return anomalyAction(JSON.parse(aa.dataset.aact), aa);
+  const al = e.target.closest("[data-alm]"); if (al) return openAlm(JSON.parse(al.dataset.alm));
+  const cg = e.target.closest("[data-chg]"); if (cg) return assessChange(cg.dataset.chg);
+  const cpo = e.target.closest("[data-cpost]"); if (cpo) return postAssessment(cpo.dataset.cpost, cpo);
+  const cve = e.target.closest("[data-cverify]"); if (cve) return verifyChange(cve.dataset.cverify);
+  const sch = e.target.closest("[data-slo-changes]"); if (sch) { switchAgent("change"); return; }
+  const fn = e.target.closest("[data-flownode]");
+  if (fn) { return fn.closest("#t-flow") ? openMapSystem(fn.dataset.flownode) : openSystem(fn.dataset.flownode); }
+  const wt = e.target.closest("[data-wft]"); if (wt) { const ev = wt.nextElementSibling; ev.hidden = !ev.hidden; wt.setAttribute("aria-expanded", String(!ev.hidden)); return; }
+  const tk = e.target.closest("[data-track]"); if (tk) { $("#f-id").value = tk.dataset.track; $("#f-rep").value = ""; return trackTxn(); }
+  const ta = e.target.closest("[data-tattach]"); if (ta) return attachTrace(JSON.parse(ta.dataset.tattach), ta);
+  const rt = e.target.closest("[data-rtab]"); if (rt) { selectTab(rt.dataset.rtab); if (rt.dataset.rtab === "rrep" && !rMd) draftReport(); return; }
+  const inc = e.target.closest("[data-inc]");
+  if (inc) return inc.closest("#msgs-rca") ? investigate(inc.dataset.inc) : openIncident(inc.dataset.inc);
+  const ask = e.target.closest("[data-ask]"); if (ask) { setView("chat"); return send(ask.dataset.ask); }
+  const rc = e.target.closest("[data-rca]"); if (rc) { return loadRca(rc.dataset.rca); }
+  const rec = e.target.closest("[data-record]"); if (rec) { rec.disabled = true; return runWrite("record_rca", JSON.parse(rec.dataset.record), rec.closest(".ins")); }
+  const as = e.target.closest("[data-assign]"); if (as) { const a = JSON.parse(as.dataset.assign); as.disabled = true; return runWrite("update_incident", a, as.closest(".ins")); }
+  const ln = e.target.closest("[data-link]"); if (ln) { ln.disabled = true; return runWrite("link_duplicate", JSON.parse(ln.dataset.link), ln.closest(".ins")); }
+  const fill = e.target.closest("[data-fill]"); if (fill) { setView("chat"); $("#input").value = fill.dataset.fill; $("#input").focus(); autosize(); }
+});
+$("#search").onsubmit = (e) => { e.preventDefault(); searchIncidents(); };
+$("#q-prio").onchange = searchIncidents; $("#q-active").onchange = searchIncidents;
+$("#tab-shift").onclick = () => { selectTab("shift"); loadBriefing(); }; $("#tab-inc").onclick = () => selectTab("inc"); $("#tab-tools").onclick = () => selectTab("tools");
+$("#tab-rinv").onclick = () => selectTab("rinv"); $("#tab-rcov").onclick = () => selectTab("rcov"); $("#tab-rrep").onclick = () => selectTab("rrep");
+$("#rpick").onsubmit = (e) => { e.preventDefault(); investigate($("#r-num").value); };
+$("#tab-asig").onclick = () => selectTab("asig");
+$("#tab-aanom").onclick = () => { selectTab("aanom"); if (!loaded.vol) { loaded.vol = true; runScan(); } };
+$("#s-form").onsubmit = (e) => { e.preventDefault(); runDetect(true); }; $("#s-win").onchange = () => runDetect(); $("#tab-anoise").onclick = () => { selectTab("anoise"); if (!loaded.noise) { loaded.noise = true; loadNoise(); } }; $("#tab-asrc").onclick = () => { selectTab("asrc"); loadAnomalyMeta(); };
+$("#tab-sslo").onclick = () => selectTab("sslo"); $("#tab-sscore").onclick = () => { selectTab("sscore"); loadScorecard(); }; $("#tab-ssrc").onclick = () => selectTab("ssrc");
+$("#tab-cup").onclick = () => { selectTab("cup"); loadUpcoming(); }; $("#tab-cas").onclick = () => selectTab("cas");
+$("#tab-cdora").onclick = () => { selectTab("cdora"); loadDora(); }; $("#tab-cpol").onclick = () => { selectTab("cpol"); loadPolicy(); };
+$("#backlog-btn").onclick = openBacklog; $("#alm-close").onclick = () => $("#alm-dlg").close();
+$("#ca-form").onsubmit = (e) => { e.preventDefault(); assessChange($("#ca-num").value); };
+$("#tab-tpath").onclick = () => { selectTab("tpath"); if (!loaded.tpath) { loaded.tpath = true; loadTxnHome(); } }; $("#tab-tfind").onclick = () => selectTab("tfind"); $("#tab-tsrc").onclick = () => selectTab("tsrc");
+$("#a-form").onsubmit = (e) => { e.preventDefault(); runScan(); };
+["#a-win", "#a-base", "#a-dim"].forEach((id) => { $(id).onchange = runScan; });
+$("#n-form").onsubmit = (e) => { e.preventDefault(); loadNoise(); };
+$("#t-form").onsubmit = (e) => { e.preventDefault(); tracePath($("#t-name").value); };
+$("#f-form").onsubmit = (e) => { e.preventDefault(); trackTxn(); };
+$("#r-obs").onsubmit = addObservation; $("#r-draft").onclick = draftReport; $("#r-copy").onclick = copyReport; $("#r-publish").onclick = publishReport;
+$("#mv-chat").onclick = () => setView("chat"); $("#mv-inspect").onclick = () => { document.body.dataset.view = "inspect"; $("#mv-chat").setAttribute("aria-selected", false); $("#mv-inspect").setAttribute("aria-selected", true); };
+$("#tool-select").onchange = renderToolForm; $("#tool-run").onclick = runTool;
+
+loadHealth(); loadBriefing(); searchIncidents(); loadTools(); refreshBacklog();
+// #incident | #rca | #rca/INC0012345 | #INC0012345 (old /rca links) | #anomaly | #txn | #txn/<transaction>
+function route() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  const num = (h.match(/INC\d{7}/i) || [""])[0].toUpperCase();
+  if (/^rca/i.test(h) || /^INC\d{7}$/i.test(h)) { if (agent !== "rca" || !rcaLoaded) switchAgent("rca", { keepHash: true }); if (num && num !== rCurrent) investigate(num); }
+  else if (/^anomal/i.test(h)) { if (agent !== "anomaly") switchAgent("anomaly", { keepHash: true }); }
+  else if (/^slo/i.test(h)) { if (agent !== "slo") switchAgent("slo", { keepHash: true }); }
+  else if (/^change/i.test(h)) { const n = (h.match(/CHG\d{7}/i) || [""])[0]; if (agent !== "change") switchAgent("change", { keepHash: true }); if (n) assessChange(n); }
+  else if (/^track\//i.test(h)) { const id = h.split("/").slice(1).join("/"); if (agent !== "txn") switchAgent("txn", { keepHash: true, tab: "tfind" }); if (id && id !== trCurrent) { $("#f-id").value = id; trackTxn(); } }
+  else if (/^txn/i.test(h)) {
+    const name = h.split("/").slice(1).join("/");
+    if (agent !== "txn") { tCurrent = name || tCurrent; switchAgent("txn", { keepHash: true }); }
+    if (name && name !== $("#t-out").dataset.shown) tracePath(name);
+  }
+  else if (agent !== "incident" || !h) switchAgent("incident", { keepHash: !h });
+}
+document.addEventListener("keydown", (e) => {
+  const fn = e.target.closest && e.target.closest("[data-flownode]");
+  if (fn && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); fn.dispatchEvent(new MouseEvent("click", { bubbles: true })); }
+});
+window.addEventListener("hashchange", route);  // replaceState() does not fire this, so only typed/linked hashes route
+route();
+</script>
+</body>
+</html>

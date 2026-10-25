@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Incident Agent Console</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: top status bar → chat (left, main) | inspector with Incidents / Tools tabs (right). Phone: one pane at a time. */
+:root{
+  --navy:#1e2a3d; --navy-2:#2a3850; --ink:#1c2533; --muted:#5f6b7a; --line:#dbe1e7;
+  --bg:#eef2f4; --surface:#ffffff; --sunk:#f5f7f9; --tint:#e6f1f0;
+  --teal:#1d7a73; --teal-ink:#145c56; --red:#b4513f; --red-soft:#f8e8e3; --amber:#a86a12; --amber-soft:#fcf1dd;
+  --good:#1f7a4d; --good-soft:#e2f2e9; --on-navy:#e9eef4; --on-navy-muted:#9fb3c6;
+  --primary:#1e2a3d; --on-primary:#e9eef4;
+  --f-display:"Space Grotesk",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --navy:#0f1823; --navy-2:#1a2636; --ink:#e3e9ef; --muted:#9aa8b6; --line:#2b3949;
+  --bg:#0b121b; --surface:#131e2b; --sunk:#0f1925; --tint:#12302d;
+  --teal:#41b3a9; --teal-ink:#73d1c7; --red:#e48a75; --red-soft:#3a231f; --amber:#e3ab5c; --amber-soft:#33281a;
+  --good:#5fc490; --good-soft:#14301f; --primary:#3a9d94; --on-primary:#06201d; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 var(--f-body);display:flex;flex-direction:column}
+h1,h2,h3,h4{font-family:var(--f-display);margin:0;letter-spacing:-.01em}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.mono{font-family:var(--f-mono);font-size:.92em}
+.muted{color:var(--muted)}
+.small{font-size:12.5px}
+
+/* top bar */
+.top{background:var(--navy);color:var(--on-navy);display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px))}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.brand .logo{width:32px;height:32px;border-radius:8px;background:var(--navy-2);display:grid;place-items:center;color:#7fd3c9}
+.brand b{font:700 17px/1 var(--f-display)} .brand small{display:block;color:#7fd3c9;font-size:12px;margin-top:3px}
+.stat{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--on-navy-muted);white-space:nowrap}
+.stat b{color:var(--on-navy);font-weight:500}
+.led{width:8px;height:8px;border-radius:50%;background:var(--on-navy-muted)}
+.led.ok{background:#4fd18b}.led.bad{background:#f07a62}.led.warn{background:#f2b750}
+
+/* panes */
+.panes{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px;
+  padding:14px max(14px,env(safe-area-inset-right,0px)) 14px max(14px,env(safe-area-inset-left,0px))}
+.pane{background:var(--surface);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;min-height:0;min-width:0}
+.pane-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.pane-head h2{font-size:15px;margin-right:auto}
+.mobile-tabs{display:none}
+
+/* chat */
+.msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+.msg{max-width:88%;display:grid;gap:6px}
+.msg.user{align-self:flex-end}
+.msg.user .bubble{background:var(--primary);color:var(--on-primary);border-radius:14px 14px 4px 14px}
+.msg.bot .bubble{background:var(--sunk);border:1px solid var(--line);border-radius:14px 14px 14px 4px}
+.bubble{padding:10px 14px;overflow-wrap:anywhere}
+.bubble p{margin:0 0 6px}.bubble p:last-child{margin:0}
+.bubble ul,.bubble ol{margin:4px 0 8px;padding-left:20px}
+.bubble h3,.bubble h4{font-size:14px;margin:8px 0 4px}
+.bubble code{font-family:var(--f-mono);font-size:12.5px;background:var(--tint);color:var(--teal-ink);padding:1px 5px;border-radius:4px}
+.bubble table{border-collapse:collapse;margin:6px 0;font-size:13px;display:block;overflow-x:auto}
+.bubble th,.bubble td{border:1px solid var(--line);padding:4px 8px;text-align:left}
+.inc-link{font-family:var(--f-mono);font-size:12.5px;color:var(--teal-ink);background:var(--tint);border:0;border-radius:4px;padding:1px 5px}
+.inc-link:hover{text-decoration:underline}
+.trail{display:flex;flex-wrap:wrap;gap:6px}
+.trail details{font-size:12px}
+.trail summary{list-style:none;cursor:pointer;font-family:var(--f-mono);font-size:11.5px;padding:4px 8px;border-radius:6px;background:var(--tint);color:var(--teal-ink)}
+.trail summary.w{background:var(--amber-soft);color:var(--amber)}
+.trail summary::-webkit-details-marker{display:none}
+.trail pre{margin:4px 0 0;font:11.5px/1.4 var(--f-mono);background:var(--sunk);border:1px solid var(--line);border-radius:6px;padding:6px 8px;white-space:pre-wrap;max-width:420px}
+.typing{color:var(--muted);font-size:13px;display:flex;align-items:center;gap:8px}
+.typing i{width:6px;height:6px;border-radius:50%;background:var(--teal);animation:blink 1s infinite alternate}
+.typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+@keyframes blink{from{opacity:.25}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.typing i{animation:none}}
+.empty{margin:auto;text-align:center;max-width:46ch;display:grid;gap:8px;padding:24px}
+.empty h3{font-size:18px}
+
+/* approval card */
+.approval{border:2px solid var(--amber);background:var(--amber-soft);border-radius:12px;padding:12px 14px;display:grid;gap:8px;max-width:88%}
+.approval h4{font-size:14px;display:flex;gap:8px;align-items:center}
+.approval h4::before{content:"!";width:18px;height:18px;border-radius:50%;background:var(--amber);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700}
+.approval.done{border-color:var(--line);background:var(--sunk)}
+.approval.done h4::before{background:var(--good);content:"✓"}
+.approval.no h4::before{background:var(--muted);content:"×"}
+.kv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;font-size:13px}
+.kv span{color:var(--muted)} .kv b{font-weight:500;overflow-wrap:anywhere;white-space:pre-wrap}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 12px;font-weight:600;font-size:13px}
+a.btn{text-decoration:none;color:var(--ink);display:inline-flex;align-items:center}
+.btn.primary{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+.btn.go{background:var(--good);color:#fff;border-color:var(--good)}
+.btn.ghost{background:transparent}
+.btn:disabled{opacity:.55;cursor:default}
+
+/* composer */
+.composer{border-top:1px solid var(--line);padding:10px 12px;display:grid;gap:8px}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:thin}
+.chip{flex:none;border:1px solid var(--line);background:var(--sunk);border-radius:999px;padding:5px 10px;font-size:12.5px}
+.chip:hover{border-color:var(--teal);color:var(--teal-ink)}
+.input{display:flex;gap:8px;align-items:flex-end}
+.input textarea{flex:1;min-width:0;resize:none;border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--surface);max-height:160px}
+
+/* inspector */
+.tabs{display:flex;gap:4px;margin-right:auto}
+.tab{border:0;background:transparent;padding:6px 10px;border-radius:7px;font-weight:600;color:var(--muted)}
+.tab[aria-selected="true"]{background:var(--tint);color:var(--teal-ink)}
+.body{flex:1;overflow-y:auto;padding:14px 16px;display:grid;gap:14px;align-content:start}
+.filters{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center}
+.filters input,.filters select,.form input,.form select,.form textarea{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--surface);min-width:0;width:100%}
+.check{display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--muted);white-space:nowrap}
+.check input{width:auto}
+.list{display:grid;gap:6px}
+.item{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 10px;align-items:center;text-align:left;
+  border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 12px;width:100%}
+.item:hover,.item.on{border-color:var(--teal)}
+.item .num{font-family:var(--f-mono);font-size:12.5px;font-weight:500}
+.item .sd{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .meta{grid-column:2/4;font-size:12px;color:var(--muted)}
+.prio{font:600 11px/1 var(--f-mono);padding:4px 6px;border-radius:5px;background:var(--sunk);color:var(--muted);white-space:nowrap}
+.prio.p1{background:var(--red);color:#fff}.prio.p2{background:var(--red-soft);color:var(--red)}.prio.p3{background:var(--amber-soft);color:var(--amber)}
+.state{font-size:12px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
+.detail{border-top:1px solid var(--line);padding-top:14px;display:grid;gap:12px}
+.detail-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.detail-head h3{font-size:16px;flex-basis:100%}
+.desc{background:var(--sunk);border-radius:8px;padding:10px 12px;font-size:13px;white-space:pre-wrap}
+.sec h4{font:600 11.5px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.tl{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.tl li{border-left:3px solid var(--teal);padding:2px 0 2px 10px;font-size:13px}
+.tl li.comment{border-color:var(--amber)}
+.tl small{display:block;color:var(--muted);font-size:11.5px}
+.card{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;display:grid;gap:2px}
+.alert{background:var(--red-soft);color:var(--red);border-radius:10px;padding:10px 12px;font-size:13px;font-weight:500}
+.note{font-size:12.5px;color:var(--muted)}
+
+.form{display:grid;gap:10px}
+.form label{display:grid;gap:4px;font-size:12.5px;color:var(--muted)}
+.form label b{color:var(--ink);font-weight:600;font-family:var(--f-mono);font-size:12.5px}
+.out{margin:0;font:12px/1.45 var(--f-mono);background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:10px 12px;white-space:pre-wrap;overflow-x:auto;max-height:340px}
+.shift-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.shift-head h3{font-size:18px}
+.headline{font-size:14px;font-weight:600;background:var(--tint);color:var(--teal-ink);border-radius:10px;padding:10px 12px}
+.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.kpi{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:2px}
+.kpi b{font:700 22px/1.1 var(--f-display);font-variant-numeric:tabular-nums}
+.kpi span{font-size:12px;color:var(--muted)}
+.kpi.hot b{color:var(--red)} .kpi.warn b{color:var(--amber)}
+.sla{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 10px;align-items:center;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;text-align:left;background:var(--surface);width:100%}
+.sla .bar{height:6px;border-radius:3px;background:var(--sunk);overflow:hidden;grid-column:1/4}
+.sla .bar i{display:block;height:100%;background:var(--amber)} .sla.br .bar i{background:var(--red)}
+.pct{font:600 12px var(--f-mono)} .sla.br .pct{color:var(--red)}
+.ins{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:8px}
+.ins.reco{border-color:var(--teal);background:var(--tint)}
+.person{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;font-size:13px}
+.person b{font-size:14px} .person .note{grid-column:1/3}
+.srcbadge{font:600 10.5px/1 var(--f-mono);padding:3px 6px;border-radius:4px;letter-spacing:.04em}
+.srcbadge.live{background:var(--good-soft);color:var(--good)} .srcbadge.snapshot{background:var(--amber-soft);color:var(--amber)} .srcbadge.mock{background:var(--red);color:#fff}
+@media (max-width:520px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.rca-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.verdict{font-weight:700;font-size:14px}
+.hyp{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:6px}
+.hyp.lead{border-color:var(--red);background:color-mix(in srgb,var(--red-soft) 45%,var(--surface))}
+.hyp-head{display:flex;gap:8px;align-items:baseline;justify-content:space-between}
+.conf{height:6px;border-radius:3px;background:var(--sunk);overflow:hidden}
+.conf i{display:block;height:100%;background:var(--teal)} .hyp.lead .conf i{background:var(--red)}
+.hyp ul{margin:0;padding-left:18px;font-size:13px;display:grid;gap:2px}
+.chipset{display:flex;flex-wrap:wrap;gap:4px}
+.evid{font:500 11px/1 var(--f-mono);padding:4px 6px;border-radius:5px;background:var(--red-soft);color:var(--red);border:0}
+.tl2{list-style:none;margin:0;padding:0;display:grid;gap:4px;font-size:12.5px}
+.tl2 li{display:grid;grid-template-columns:118px 64px minmax(0,1fr);gap:8px;align-items:baseline}
+.tl2 .k{font:600 10px/1 var(--f-mono);text-transform:uppercase;padding:3px 5px;border-radius:4px;background:var(--sunk);color:var(--muted);text-align:center}
+.tl2 .k-change{background:var(--amber-soft);color:var(--amber)} .tl2 .k-incident{background:var(--red);color:#fff} .tl2 .k-related{background:var(--red-soft);color:var(--red)}
+@media (max-width:520px){.tl2 li{grid-template-columns:1fr}}
+.tag{font:600 10.5px/1 var(--f-mono);padding:3px 6px;border-radius:4px;background:var(--amber-soft);color:var(--amber);letter-spacing:.04em}
+
+@media (max-width:900px){
+  .panes{grid-template-columns:1fr;padding-top:0}
+  .mobile-tabs{display:flex;gap:6px;padding:10px max(14px,env(safe-area-inset-right,0px)) 10px max(14px,env(safe-area-inset-left,0px))}
+  .mobile-tabs button{flex:1;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px;font-weight:600;font-size:13px}
+  .mobile-tabs button[aria-selected="true"]{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+  body[data-view="chat"] #inspector,body[data-view="inspect"] #chatpane{display:none}
+  .msg,.approval{max-width:100%}
+  .stat.model{display:none}
+  .stat{white-space:normal;flex-wrap:wrap;min-width:0;max-width:100%}
+  .pane-head > .small.muted{display:none}
+}
+</style>
+</head>
+<body data-view="chat">
+
+<header class="top">
+  <div class="brand">
+    <div class="logo" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 2 21 7v10l-9 5-9-5V7z"/><path d="M3 7l9 5 9-5M12 12v10"/></svg></div>
+    <div><b>Incident Agent</b><small>LangChain · ServiceNow test console</small></div>
+  </div>
+  <span class="stat" id="st-sn"><span class="led"></span>ServiceNow <b>checking…</b></span>
+  <span class="stat model" id="st-model"><span class="led ok"></span>Model <b>–</b></span>
+  <span class="stat" id="st-appr"><span class="led"></span>Approvals <b>–</b></span>
+</header>
+
+<nav class="mobile-tabs" aria-label="View">
+  <button id="mv-chat" aria-selected="true">Chat</button>
+  <button id="mv-inspect" aria-selected="false">Shift &amp; incidents</button>
+</nav>
+
+<div class="panes">
+  <!-- chat -->
+  <section class="pane" id="chatpane" aria-label="Chat">
+    <div class="pane-head">
+      <h2>Chat</h2>
+      <span class="small muted mono" id="thread"></span>
+      <button class="btn ghost" id="newchat">New chat</button>
+    </div>
+    <div class="msgs" id="msgs">
+      <div class="empty" id="empty">
+        <h3>Ask about your incidents</h3>
+        <p class="muted">The agent reads ServiceNow with tools. Creates, updates, notes and resolves wait for your Approve.</p>
+      </div>
+    </div>
+    <div class="composer">
+      <div class="chips" id="chips"></div>
+      <form class="input" id="form">
+        <textarea id="input" rows="1" placeholder="e.g. Show open P1 and P2 incidents" aria-label="Message"></textarea>
+        <button class="btn primary" id="send" type="submit">Send</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- inspector -->
+  <section class="pane" id="inspector" aria-label="Inspector">
+    <div class="pane-head">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-shift" aria-selected="true">Shift</button>
+        <button class="tab" role="tab" id="tab-inc" aria-selected="false">Incidents</button>
+        <button class="tab" role="tab" id="tab-tools" aria-selected="false">Tool tester</button>
+      </div>
+      <span class="small muted">No LLM needed</span>
+    </div>
+
+    <div class="body" id="panel-shift"><p class="note">Loading your shift briefing…</p></div>
+
+    <div class="body" id="panel-inc" hidden>
+      <form class="filters" id="search">
+        <input id="q-text" placeholder="Search text, or an INC number" aria-label="Search">
+        <select id="q-prio" aria-label="Priority">
+          <option value="">Any priority</option><option value="1">P1</option><option value="<=2">P1–P2</option>
+          <option value="<=3">P1–P3</option><option value="4">P4</option>
+        </select>
+        <label class="check"><input type="checkbox" id="q-active" checked> Active</label>
+      </form>
+      <div class="list" id="list"></div>
+      <div id="detail"></div>
+    </div>
+
+    <div class="body" id="panel-tools" hidden>
+      <label class="form"><span class="muted small">Tool</span>
+        <select id="tool-select" aria-label="Tool"></select>
+      </label>
+      <p class="note" id="tool-desc"></p>
+      <form class="form" id="tool-form"></form>
+      <div class="row"><button class="btn primary" id="tool-run" type="button">Run tool</button>
+        <span class="note">Write tools return an approval card here; nothing is written until you approve.</span></div>
+      <div id="tool-out"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const newThread = () => Math.random().toString(36).slice(2, 10);
+let thread = newThread();
+let busy = false;
+let selected = null;
+let rcaOpen = null;  // keep the RCA panel open when the incident view refreshes
+
+const PROMPTS = [
+  "Start my shift",
+  "Give me the handover for the last 12 hours",
+  "Who has solved incidents like the top P1 before?",
+  "Any duplicates of the newest P1? Who should it be assigned to?",
+  "Why did the top P1 happen? Run an RCA",
+  "Which SLAs are about to breach?",
+  "Are there recurring incidents that need a problem record?",
+  "How is each team doing this month?",
+];
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  let data = {};
+  try { data = await r.json(); } catch { /* empty body */ }
+  if (!r.ok) throw new Error(data.error || data.detail || `Request failed (${r.status})`);
+  return data;
+}
+
+/* ---------- markdown (small, safe) ---------- */
+function inline(s) {
+  return esc(s)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>")
+    .replace(/\b(INC\d{7})\b/g, '<button class="inc-link" data-inc="$1" type="button">$1</button>');
+}
+function md(text) {
+  const lines = String(text || "").split("\n"); const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (/^\s*\|/.test(l)) {
+      const rows = []; while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(lines[i++]); i--;
+      const cells = (r) => r.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      const body = rows.filter((r, j) => j > 0 && !/^\s*\|?\s*:?-{2,}/.test(r));
+      out.push(`<table><thead><tr>${cells(rows[0]).map((c) => `<th>${inline(c)}</th>`).join("")}</tr></thead><tbody>${body.map((r) => `<tr>${cells(r).map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`);
+    } else if (/^#{1,4}\s/.test(l)) out.push(`<h4>${inline(l.replace(/^#+\s/, ""))}</h4>`);
+    else if (/^\s*[-*•]\s/.test(l)) {
+      const it = []; while (i < lines.length && /^\s*[-*•]\s/.test(lines[i])) it.push(`<li>${inline(lines[i++].replace(/^\s*[-*•]\s/, ""))}</li>`); i--;
+      out.push(`<ul>${it.join("")}</ul>`);
+    } else if (/^\s*\d+[.)]\s/.test(l)) {
+      const it = []; while (i < lines.length && /^\s*\d+[.)]\s/.test(lines[i])) it.push(`<li>${inline(lines[i++].replace(/^\s*\d+[.)]\s/, ""))}</li>`); i--;
+      out.push(`<ol>${it.join("")}</ol>`);
+    } else if (l.trim()) out.push(`<p>${inline(l)}</p>`);
+  }
+  return out.join("");
+}
+
+/* ---------- status ---------- */
+async function loadHealth() {
+  try {
+    const h = await api("/api/health");
+    const src = { live: "LIVE", snapshot: "SNAPSHOT", mock: "MOCK DATA" }[h.mode] || h.mode;
+    $("#st-sn").innerHTML = `<span class="led ${h.servicenow_ok ? "ok" : "bad"}"></span><span class="srcbadge ${esc(h.mode)}">${esc(src)}</span> <b>${esc((h.instance || "").replace(/^https?:\/\//, ""))}</b>${h.servicenow_ok && h.user ? ` <span>as ${esc(h.user)}</span>` : ""}`;
+    $("#st-sn").title = h.servicenow_ok ? "" : h.servicenow_error || "";
+    $("#st-model").innerHTML = `<span class="led ok"></span>Model <b>${esc(h.model)}</b>`;
+    $("#st-appr").innerHTML = `<span class="led ${h.approvals ? "ok" : "warn"}"></span>Approvals <b>${h.approvals ? "on" : "off"}</b>`;
+    if (!h.servicenow_ok) showAlert($("#list"), `ServiceNow not reachable: ${h.servicenow_error}`);
+  } catch (e) {
+    $("#st-sn").innerHTML = `<span class="led bad"></span>Server <b>offline</b>`;
+  }
+}
+
+/* ---------- chat ---------- */
+function addMsg(role, html) {
+  $("#empty")?.remove();
+  const d = document.createElement("div");
+  d.className = `msg ${role}`; d.innerHTML = html;
+  $("#msgs").appendChild(d); $("#msgs").scrollTop = $("#msgs").scrollHeight;
+  return d;
+}
+function trailHtml(calls) {
+  if (!calls?.length) return "";
+  const WRITE = ["create_incident", "update_incident", "add_work_note", "resolve_incident"];
+  return `<div class="trail">${calls.map((c) => `<details><summary class="${WRITE.includes(c.tool) ? "w" : ""}">↳ ${esc(c.tool)}</summary><pre>${esc(JSON.stringify(c.args, null, 1))}</pre></details>`).join("")}</div>`;
+}
+function showReply(res) {
+  if (res.reply) addMsg("bot", `${trailHtml(res.tool_calls)}<div class="bubble">${md(res.reply)}</div>`);
+  (res.pending || []).forEach((p) => approvalCard(p, $("#msgs"), true));
+}
+function approvalCard(p, container, viaChat) {
+  $("#empty")?.remove();
+  const el = document.createElement("div");
+  el.className = "approval";
+  el.innerHTML = `<h4>Approve: ${esc(p.action)}</h4>
+    <div class="kv">${Object.entries(p.details).map(([k, v]) => `<span>${esc(k)}</span><b>${esc(typeof v === "string" ? v : JSON.stringify(v))}</b>`).join("")}</div>
+    <div class="row"><button class="btn go" data-a="1" type="button">Approve and write</button><button class="btn ghost" data-a="0" type="button">Reject</button>
+    <span class="note">Nothing is written until you approve.</span></div>`;
+  el.querySelectorAll("button[data-a]").forEach((b) => b.onclick = async () => {
+    const approved = b.dataset.a === "1";
+    el.querySelectorAll("button").forEach((x) => x.disabled = true);
+    try {
+      const res = await api("/api/approve", { id: p.id, approved, thread_id: thread, tell_agent: viaChat });
+      el.classList.add("done"); if (!approved) el.classList.add("no");
+      el.querySelector("h4").textContent = `${approved ? "Approved" : "Rejected"}: ${p.action}`;
+      el.querySelector(".row").innerHTML = `<span class="note">${resultLine(res.result)}</span>`;
+      if (viaChat) showReply(res); else if (approved) refreshSelected();
+      if (approved) { searchIncidents(); refreshSelected(); loadBriefing(); }
+    } catch (e) {
+      el.querySelector(".row").insertAdjacentHTML("beforeend", `<span class="alert">${esc(e.message)}</span>`);
+    }
+  });
+  container.appendChild(el);
+  if (container === $("#msgs")) container.scrollTop = container.scrollHeight;
+}
+function resultLine(r) {
+  try {
+    const o = JSON.parse(r);
+    const verb = o.created ? "Created" : o.updated ? "Updated" : o.resolved ? "Resolved" : o.added ? `Added ${o.added} to` : "Done:";
+    const num = o.created || o.updated || o.resolved || o.incident || o.number || "";
+    const extra = [o.priority, o.state, o.assignment_group].filter(Boolean).join(" · ");
+    return `${verb} ${inline(num)}${extra ? ` <span class="muted">· ${esc(extra)}</span>` : ""}`;
+  } catch { return esc(r); }
+}
+async function send(text) {
+  text = text.trim(); if (!text || busy) return;
+  busy = true; $("#send").disabled = true;
+  addMsg("user", `<div class="bubble">${esc(text)}</div>`);
+  $("#input").value = ""; autosize();
+  const t = addMsg("bot", `<div class="typing"><i></i><i></i><i></i> Working with ServiceNow…</div>`);
+  try {
+    const res = await api("/api/chat", { message: text, thread_id: thread });
+    t.remove(); showReply(res);
+  } catch (e) {
+    t.innerHTML = `<div class="alert">${esc(e.message)}</div>`;
+  } finally { busy = false; $("#send").disabled = false; $("#input").focus(); }
+}
+function autosize() { const a = $("#input"); a.style.height = "auto"; a.style.height = Math.min(a.scrollHeight, 160) + "px"; }
+
+/* ---------- incidents ---------- */
+const prioClass = (p) => `prio p${String(p || "").trim()[0] || ""}`;
+const prioLabel = (p) => (p ? `P${String(p).trim()[0]}` : "–");
+function showAlert(el, msg) { el.innerHTML = `<div class="alert">${esc(msg)}</div>`; }
+
+async function searchIncidents() {
+  const text = $("#q-text").value.trim();
+  if (/^INC\d{7}$/i.test(text)) return openIncident(text.toUpperCase());
+  const q = new URLSearchParams({ text, priority: $("#q-prio").value, active_only: $("#q-active").checked, limit: 20 });
+  const list = $("#list");
+  list.innerHTML = `<p class="note">Loading…</p>`;
+  try {
+    const rows = await api(`/api/incidents?${q}`);
+    if (!rows.length) { list.innerHTML = `<p class="note">No incidents match.</p>`; return; }
+    list.innerHTML = rows.map((r) => `
+      <button class="item ${r.number === selected ? "on" : ""}" data-inc="${esc(r.number)}" type="button">
+        <span class="num">${esc(r.number)}</span><span class="sd">${esc(r.short_description)}</span><span class="${prioClass(r.priority)}">${prioLabel(r.priority)}</span>
+        <span class="meta">${esc(r.state)} · ${esc(r.assignment_group || "unassigned")} · ${esc(r.opened_at || "")}</span>
+      </button>`).join("");
+  } catch (e) { showAlert(list, e.message); }
+}
+async function openIncident(num) {
+  selected = num;
+  document.querySelectorAll(".item").forEach((b) => b.classList.toggle("on", b.dataset.inc === num));
+  selectTab("inc"); setView("inspect");
+  const d = $("#detail");
+  d.innerHTML = `<div class="detail"><p class="note">Loading ${esc(num)}…</p></div>`;
+  try {
+    const x = await api(`/api/incidents/${encodeURIComponent(num)}`);
+    const i = x.incident;
+    const f = [["Caller", i.caller_id], ["Group", i.assignment_group], ["Assigned to", i.assigned_to], ["CI", i.cmdb_ci],
+               ["Category", i.category], ["Impact / urgency", `${i.impact || "–"} / ${i.urgency || "–"}`], ["Opened", i.opened_at],
+               ["Updated", i.sys_updated_on], ["Resolution", i.close_code ? `${i.close_code}: ${i.close_notes || ""}` : ""]].filter(([, v]) => v);
+    d.innerHTML = `<div class="detail">
+      <div class="detail-head"><span class="num mono">${esc(i.number)}</span><span class="${prioClass(i.priority)}">${esc(i.priority || "")}</span><span class="state">${esc(i.state)}</span>
+        <h3>${esc(i.short_description)}</h3></div>
+      <div class="row">
+        <button class="btn primary" type="button" data-ask="Summarize ${esc(i.number)}">Summarize with agent</button>
+        <button class="btn" type="button" data-ask="Triage ${esc(i.number)}: check recent changes on its CI and similar past incidents, then suggest next steps">Triage</button>
+        <button class="btn" type="button" data-rca="${esc(i.number)}">Run RCA</button>
+        <a class="btn" href="/rca#${esc(i.number)}" target="_blank" rel="noopener">Open in RCA Workbench ↗</a>
+        <button class="btn ghost" type="button" data-fill="Add a work note to ${esc(i.number)}: ">Add note…</button>
+      </div>
+      <div class="kv">${f.map(([k, v]) => `<span>${esc(k)}</span><b>${esc(v)}</b>`).join("")}</div>
+      ${i.description ? `<div class="desc">${esc(i.description)}</div>` : ""}
+      <div class="sec"><h4>Activity (${x.activity.length})</h4>${x.activity.length ? `<ul class="tl">${x.activity.map((a) => `<li class="${a.type === "comment" ? "comment" : ""}"><small>${esc(a.at)} · ${esc(a.by)} · ${esc(a.type)}</small>${esc(a.text)}</li>`).join("")}</ul>` : `<p class="note">No work notes or comments.</p>`}</div>
+      <div class="sec"><h4>Recent changes on CI</h4>${x.changes.length ? x.changes.map((c) => `<div class="card"><b class="mono">${esc(c.number)}</b>${esc(c.short_description)}<span class="note">${esc(c.state)} · ended ${esc(c.end_date)} · ${esc(c.assignment_group || "")}</span></div>`).join("") : `<p class="note">None in the 48 hours before it opened.</p>`}</div>
+      <div id="rca"></div>
+      <div id="insights"><p class="note">Checking history, duplicates and routing…</p></div>
+    </div>`;
+    loadInsights(num);
+    if (rcaOpen === num) loadRca(num);
+  } catch (e) { showAlert(d, e.message); }
+}
+const refreshSelected = () => selected && openIncident(selected);
+
+/* ---------- insights for one incident ---------- */
+async function loadInsights(num) {
+  const box = $("#insights"); if (!box) return;
+  try {
+    const x = await api(`/api/insights/${encodeURIComponent(num)}`);
+    if (selected !== num) return;
+    const e = x.experts, a = x.assignment, d = x.duplicates;
+    const people = e.experts.length ? e.experts.map((p) => `
+      <div class="person"><b>${esc(p.person)}</b><span class="pct">${p.solved_similar} similar</span>
+        <span class="note">${esc(p.group || "")}${p.median_hours_to_resolve != null ? ` · median ${p.median_hours_to_resolve}h to resolve` : ""}</span>
+        ${p.examples[0] && p.examples[0].fix ? `<span class="note">Last fix (${inline(p.examples[0].number)}): ${esc(p.examples[0].fix)}</span>` : ""}</div>`).join("")
+      : `<p class="note">No similar resolved incidents found.</p>`;
+    const r = a.recommendation;
+    const reco = r ? `<div class="ins ${a.already_correct ? "" : "reco"}"><div class="row" style="justify-content:space-between">
+        <b>${a.already_correct ? "Assignment looks right" : "Suggested assignment"}: ${esc(r.assignment_group)}${r.assigned_to ? " → " + esc(r.assigned_to) : ""}</b>
+        <span class="pct">${Math.round(r.confidence * 100)}%</span></div>
+        <span class="note">${esc(a.reasons.join(" · "))}</span>
+        ${!a.already_correct || (r.assigned_to && r.assigned_to !== a.current_assignee) ? `<div><button class="btn" type="button" data-assign='${esc(JSON.stringify({ number: num, assignment_group: r.assignment_group, assigned_to: r.assigned_to || "" }))}'>Apply…</button></div>` : ""}</div>`
+      : `<p class="note">${esc(a.reason || "No routing suggestion.")}</p>`;
+    const dups = d && d.candidates.length ? `<div class="ins"><b>${esc(d.advice)}</b>${d.candidates.map((c) => `
+        <div class="row" style="justify-content:space-between"><span>${inline(c.number)} ${esc(c.short_description)} <span class="note">(${esc(c.why.join("; "))})</span></span>
+        ${c.number !== d.suggested_parent && !c.already_child_of ? `<button class="btn" type="button" data-link='${esc(JSON.stringify({ child_number: c.number, parent_number: d.suggested_parent }))}'>Link under ${esc(d.suggested_parent)}…</button>` : ""}</div>`).join("")}</div>` : "";
+    box.innerHTML = `
+      <div class="sec"><h4>Who solved this before (${e.similar_resolved} similar resolved)</h4><div class="ins">${people}
+        ${e.most_similar.length ? `<span class="note">Closest matches: ${e.most_similar.slice(0, 3).map((m) => `${inline(m.number)} ${esc(m.short_description)} (${Math.round(m.match * 100)}%)`).join(" · ")}</span>` : ""}
+        ${e.common_resolutions.length ? `<span class="note">Usual resolution: ${esc(e.common_resolutions.map((c) => `${c.close_code} (${c.count})`).join(", "))}</span>` : ""}</div></div>
+      <div class="sec"><h4>Routing</h4>${reco}</div>
+      ${dups ? `<div class="sec"><h4>Possible duplicates</h4>${dups}</div>` : ""}`;
+  } catch (err) { box.innerHTML = `<div class="alert">${esc(err.message)}</div>`; }
+}
+async function loadRca(num) {
+  const box = $("#rca"); if (!box) return;
+  rcaOpen = num;
+  box.innerHTML = `<div class="sec"><h4>Root cause analysis</h4><p class="note">Checking changes, dependencies, notes and history…</p></div>`;
+  try {
+    const a = await api(`/api/rca/${encodeURIComponent(num)}`);
+    if (selected !== num) return;
+    const chips = (ids) => `<div class="chipset">${ids.filter(Boolean).map((e) => /^INC\d{7}$/.test(e) ? `<button class="evid" type="button" data-inc="${esc(e)}">${esc(e)}</button>` : `<span class="evid">${esc(e)}</span>`).join("")}</div>`;
+    const hyps = a.hypotheses.map((h, i) => `<div class="hyp ${i === 0 && a.sufficient_evidence ? "lead" : ""}">
+        <div class="hyp-head"><b>${esc(h.title)}</b><span class="pct">${Math.round(h.confidence * 100)}%</span></div>
+        <div class="conf"><i style="width:${Math.round(h.confidence * 100)}%"></i></div>
+        <ul>${h.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>${chips(h.evidence)}
+        <span class="note">Next: ${esc(h.action)}</span></div>`).join("") || '<p class="note">No hypotheses: not enough evidence.</p>';
+    const summary = `${a.verdict}. ` + (a.hypotheses[0] ? a.hypotheses[0].reasons.join("; ") + ". " : "") + "Next: " + a.next_actions.join(" | ");
+    box.innerHTML = `<div class="sec"><h4>Root cause analysis</h4>
+      <div class="ins ${a.sufficient_evidence ? "" : ""}">
+        <div class="rca-head"><span class="verdict">${esc(a.verdict)}</span>
+          <div class="row"><button class="btn primary" type="button" data-ask="Write the root cause analysis for ${esc(num)}">Write RCA with agent</button>
+          <a class="btn" href="/rca#${esc(num)}" target="_blank" rel="noopener">Full RCA report ↗</a>
+          <button class="btn" type="button" data-record='${esc(JSON.stringify({ number: num, rca_summary: summary }))}'>Post as work note…</button></div></div>
+        ${hyps}
+        <details><summary class="small"><b>Timeline (${a.timeline.length})</b></summary><ul class="tl2">${a.timeline.map((e) => `<li><span class="mono">${esc(e.time.slice(5, 16))}</span><span class="k k-${esc(e.kind)}">${esc(e.kind)}</span><span>${esc(e.text)}</span></li>`).join("")}</ul></details>
+        ${a.evidence_gaps.length ? `<span class="note"><b>Evidence gaps:</b> ${esc(a.evidence_gaps.join(" "))}</span>` : ""}
+      </div></div>`;
+  } catch (e) { box.innerHTML = `<div class="alert">${esc(e.message)}</div>`; }
+}
+async function runWrite(tool, args, container) {
+  try {
+    const res = await api(`/api/tools/${tool}`, { args });
+    (res.pending || []).forEach((p) => approvalCard(p, container, false));
+    if (!res.pending?.length) container.insertAdjacentHTML("beforeend", `<pre class="out">${esc(res.output)}</pre>`);
+  } catch (e) { container.insertAdjacentHTML("beforeend", `<div class="alert">${esc(e.message)}</div>`); }
+}
+
+/* ---------- shift briefing ---------- */
+function kpi(label, value, cls = "") { return `<div class="kpi ${cls}"><b>${value}</b><span>${esc(label)}</span></div>`; }
+function rowItem(r) {
+  return `<button class="item" type="button" data-inc="${esc(r.number)}"><span class="num">${esc(r.number)}</span><span class="sd">${esc(r.short_description)}</span><span class="${prioClass(r.priority)}">${prioLabel(r.priority)}</span>
+    <span class="meta">${esc(r.state || "")} · ${esc(r.assignment_group || "no group")} · ${esc(r.assigned_to || "unassigned")}${r.age_hours != null ? ` · ${fmtAge(r.age_hours)} old` : ""}</span></button>`;
+}
+function fmtAge(h) { return h < 1 ? `${Math.round(h * 60)}m` : h < 48 ? `${Math.round(h)}h` : `${Math.round(h / 24)}d`; }
+async function loadBriefing() {
+  const box = $("#panel-shift");
+  try {
+    const b = await api("/api/shift/briefing");
+    const p = b.open_by_priority || {};
+    box.innerHTML = `
+      <div class="shift-head"><div><span class="small muted">${esc(b.shift.timezone)} · started ${esc(b.shift.start_local)} · ends ${esc(b.shift.end_local)}</span>
+        <h3>${esc(b.shift.name)} shift briefing</h3></div>
+        <div class="row"><button class="btn primary" type="button" data-ask="Start my shift">Brief me in chat</button>
+        <button class="btn" type="button" id="btn-handover">Handover</button></div></div>
+      <div class="headline">${esc(b.headline)}</div>
+      <div class="kpis">${kpi("open incidents", b.open_total)}${kpi("P1 open", p.P1 || 0, p.P1 ? "hot" : "")}${kpi("P2 open", p.P2 || 0, p.P2 ? "warn" : "")}
+        ${kpi("SLA at risk", b.sla_at_risk.length, b.sla_at_risk.length ? "hot" : "")}${kpi("new this shift", b.new_since_shift_start.length)}${kpi("unassigned", b.unassigned.length, b.unassigned.length ? "warn" : "")}</div>
+      <div class="sec"><h4>Top ${b.top.length} by priority</h4><div class="list">${b.top.map(rowItem).join("") || '<p class="note">No open incidents.</p>'}</div></div>
+      <div class="sec"><h4>SLA at risk</h4><div class="list">${b.sla_at_risk.map((s) => `<button class="sla ${s.breached ? "br" : ""}" type="button" data-inc="${esc(s.number)}">
+        <span class="num mono">${esc(s.number)}</span><span class="small">${esc(s.sla || "")}</span><span class="pct">${s.breached ? "BREACHED" : s.percent_elapsed + "%"}</span>
+        <span class="bar"><i style="width:${Math.min(100, s.percent_elapsed)}%"></i></span></button>`).join("") || '<p class="note">Nothing at risk.</p>'}</div>
+        ${b.sla_at_risk[0] && b.sla_at_risk[0].source !== "task_sla" ? '<p class="note">Estimated from priority targets (no task_sla records returned).</p>' : ""}</div>
+      <div class="sec"><h4>New since the shift started</h4><div class="list">${b.new_since_shift_start.map(rowItem).join("") || '<p class="note">Nothing new yet.</p>'}</div></div>
+      <div class="sec"><h4>Aged over 3 days</h4><div class="list">${b.aged_over_3_days.map(rowItem).join("") || '<p class="note">None.</p>'}</div></div>
+      <div id="handover"></div>`;
+    $("#btn-handover").onclick = loadHandover;
+  } catch (e) { box.innerHTML = `<div class="alert">${esc(e.message)}</div>`; }
+}
+async function loadHandover() {
+  const box = $("#handover"); box.innerHTML = `<p class="note">Loading handover…</p>`;
+  try {
+    const h = await api("/api/shift/handover?hours=12");
+    box.innerHTML = `<div class="sec"><h4>Handover · last ${h.window_hours}h</h4><div class="headline">${esc(h.summary)}</div>
+      ${h.resolved.length ? `<p class="small"><b>Resolved:</b></p>${h.resolved.map((r) => `<div class="card">${inline(r.number)} ${esc(r.short_description)}<span class="note">${esc(r.resolved_by || "")}: ${esc(r.fix || "")}</span></div>`).join("")}` : ""}
+      ${h.carry_over.length ? `<p class="small"><b>Carry over:</b></p>${h.carry_over.map((r) => `<div class="card">${inline(r.number)} ${esc(r.short_description)} <span class="${prioClass(r.priority)}">${prioLabel(r.priority)}</span>${r.last_note ? `<span class="note">Last note: ${esc(r.last_note)}</span>` : ""}</div>`).join("")}` : ""}</div>`;
+  } catch (e) { box.innerHTML = `<div class="alert">${esc(e.message)}</div>`; }
+}
+
+/* ---------- tool tester ---------- */
+let TOOLS = [];
+function enumOf(p) { return p.enum || (p.anyOf || []).flatMap((a) => a.enum || []); }
+function typeOf(p) { return p.type || (p.anyOf || []).map((a) => a.type).find((t) => t && t !== "null") || "string"; }
+function renderToolForm() {
+  const t = TOOLS.find((x) => x.name === $("#tool-select").value); if (!t) return;
+  $("#tool-desc").innerHTML = `${t.write ? '<span class="tag">WRITE · NEEDS APPROVAL</span> ' : ""}${esc(t.description)}`;
+  $("#tool-form").innerHTML = Object.entries(t.args).map(([name, p]) => {
+    const id = `arg-${name}`; const en = enumOf(p); const ty = typeOf(p);
+    const def = p.default ?? "";
+    let field;
+    if (en.length) field = `<select id="${id}" data-arg="${name}"><option value="">${def === "" || def === null ? "(not set)" : `default: ${esc(def)}`}</option>${en.map((v) => `<option>${esc(v)}</option>`).join("")}</select>`;
+    else if (ty === "boolean") field = `<select id="${id}" data-arg="${name}" data-type="boolean"><option value="">default: ${esc(String(def || false))}</option><option value="true">true</option><option value="false">false</option></select>`;
+    else if (/note|description|notes/.test(name)) field = `<textarea id="${id}" data-arg="${name}" rows="3"></textarea>`;
+    else field = `<input id="${id}" data-arg="${name}" ${ty === "integer" ? 'type="number"' : ""} placeholder="${esc(def === "" || def === null ? "" : `default: ${def}`)}">`;
+    const req = p.default === undefined && !(p.anyOf || []).some((a) => a.type === "null");
+    return `<label for="${id}"><b>${esc(name)}${req ? " *" : ""}</b>${field}</label>`;
+  }).join("") || `<p class="note">No arguments.</p>`;
+  $("#tool-out").innerHTML = "";
+}
+async function loadTools() {
+  try {
+    TOOLS = await api("/api/tools");
+    $("#tool-select").innerHTML = TOOLS.map((t) => `<option value="${esc(t.name)}">${esc(t.name)}${t.write ? "  (write)" : ""}</option>`).join("");
+    renderToolForm();
+  } catch (e) { showAlert($("#tool-out"), e.message); }
+}
+async function runTool() {
+  const name = $("#tool-select").value; const args = {};
+  document.querySelectorAll("#tool-form [data-arg]").forEach((el) => {
+    let v = el.value.trim(); if (v === "") return;
+    if (el.dataset.type === "boolean") v = v === "true"; else if (el.type === "number") v = Number(v);
+    args[el.dataset.arg] = v;
+  });
+  const out = $("#tool-out");
+  out.innerHTML = `<p class="note">Running ${esc(name)}…</p>`;
+  $("#tool-run").disabled = true;
+  try {
+    const res = await api(`/api/tools/${name}`, { args });
+    let text = res.output;
+    try { text = JSON.stringify(JSON.parse(res.output), null, 2); } catch { /* plain text */ }
+    out.innerHTML = res.pending?.length ? "" : `<pre class="out">${esc(text)}</pre>`;
+    (res.pending || []).forEach((p) => approvalCard(p, out, false));
+  } catch (e) { showAlert(out, e.message); }
+  finally { $("#tool-run").disabled = false; }
+}
+
+/* ---------- view switching ---------- */
+function selectTab(which) {
+  ["shift", "inc", "tools"].forEach((t) => { $("#tab-" + t).setAttribute("aria-selected", which === t); $("#panel-" + t).hidden = which !== t; });
+}
+function setView(v) {
+  if (!window.matchMedia("(max-width: 900px)").matches && v === "inspect") return;
+  document.body.dataset.view = v;
+  $("#mv-chat").setAttribute("aria-selected", v === "chat"); $("#mv-inspect").setAttribute("aria-selected", v === "inspect");
+}
+
+/* ---------- wiring ---------- */
+$("#chips").innerHTML = PROMPTS.map((p) => `<button class="chip" type="button">${esc(p)}</button>`).join("");
+$("#chips").onclick = (e) => { if (e.target.classList.contains("chip")) send(e.target.textContent); };
+$("#form").onsubmit = (e) => { e.preventDefault(); send($("#input").value); };
+$("#input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send($("#input").value); } });
+$("#input").addEventListener("input", autosize);
+$("#newchat").onclick = () => { thread = newThread(); $("#thread").textContent = `thread ${thread}`; $("#msgs").innerHTML = ""; addMsg("bot", `<div class="bubble muted">New conversation started.</div>`); };
+document.addEventListener("click", (e) => {
+  const inc = e.target.closest("[data-inc]"); if (inc) return openIncident(inc.dataset.inc);
+  const ask = e.target.closest("[data-ask]"); if (ask) { setView("chat"); return send(ask.dataset.ask); }
+  const rc = e.target.closest("[data-rca]"); if (rc) { return loadRca(rc.dataset.rca); }
+  const rec = e.target.closest("[data-record]"); if (rec) { rec.disabled = true; return runWrite("record_rca", JSON.parse(rec.dataset.record), rec.closest(".ins")); }
+  const as = e.target.closest("[data-assign]"); if (as) { const a = JSON.parse(as.dataset.assign); as.disabled = true; return runWrite("update_incident", a, as.closest(".ins")); }
+  const ln = e.target.closest("[data-link]"); if (ln) { ln.disabled = true; return runWrite("link_duplicate", JSON.parse(ln.dataset.link), ln.closest(".ins")); }
+  const fill = e.target.closest("[data-fill]"); if (fill) { setView("chat"); $("#input").value = fill.dataset.fill; $("#input").focus(); autosize(); }
+});
+$("#search").onsubmit = (e) => { e.preventDefault(); searchIncidents(); };
+$("#q-prio").onchange = searchIncidents; $("#q-active").onchange = searchIncidents;
+$("#tab-shift").onclick = () => { selectTab("shift"); loadBriefing(); }; $("#tab-inc").onclick = () => selectTab("inc"); $("#tab-tools").onclick = () => selectTab("tools");
+$("#mv-chat").onclick = () => setView("chat"); $("#mv-inspect").onclick = () => { document.body.dataset.view = "inspect"; $("#mv-chat").setAttribute("aria-selected", false); $("#mv-inspect").setAttribute("aria-selected", true); };
+$("#tool-select").onchange = renderToolForm; $("#tool-run").onclick = runTool;
+$("#thread").textContent = `thread ${thread}`;
+
+loadHealth(); loadBriefing(); searchIncidents(); loadTools();
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "_comment": "Copy to rca_config.json. Maps ServiceNow CIs to the repo/environment the RCA agent checks for commits, PRs and deployments.",
+  "ci_map": {
+    "EXCH-SD-05": {"repo": "your-org/exchange-config", "environment": "production"},
+    "enrollment-api": {"repo": "your-org/enrollment-api", "environment": "production"}
+  }
+}
